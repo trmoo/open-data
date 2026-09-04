@@ -1,0 +1,11 @@
+node_modules/
+dist/
+
+# 원본 학습지·교안은 저작권상 저장소에 올리지 않는다
+*.pdf
+*.hwp
+*.hwpx
+*.docx
+*.pptx
+*.xlsx
+source/

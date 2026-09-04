@@ -1,0 +1,815 @@
+<!--
+  공공데이터 수집 기록장 — 화면 부품 (DOM · 서술 칸 · 채점 위젯 · 속성 표)
+  © 2026 티쳐무 · 모든 권리 보유
+
+  ⚠ 화면 모듈(s1·s2)에서 window.addEventListener('resize', …) 나 setInterval 을
+     직접 쓰지 말 것. 탭을 옮겨도 살아남아 오갈 때마다 쌓인다.
+     onResize()·screenTimer() 를 쓴다.
+  ⚠ 브라우저 기본 alert·confirm·prompt 를 쓰지 말 것.
+     앱스 스크립트 웹앱은 googleusercontent.com iframe 안에서 돌기 때문에 크롬이
+     「…googleusercontent.com 에 삽입된 페이지 내용:」 이라는 주소를 앞에 붙여 학생에게 보인다.
+     say()·ask()·modal() 을 쓴다.
+-->
+<script>
+/* ════════════════════════════════════════════════════════════
+   1. DOM 만들기
+   ════════════════════════════════════════════════════════════ */
+/**
+ * h('div.card', {id:'x'}, [자식…]) — 태그 이름에 .클래스 를 붙여 쓸 수 있다.
+ * ⚠ 문자열 자식은 글자 그대로 들어간다. HTML 을 넣어야 하면 {html:'…'} 를 쓸 것
+ *   (자식 자리에 '<b>굵게</b>' 를 넣으면 태그가 그대로 보인다).
+ */
+function h(sel, attrs, kids) {
+  var parts = String(sel).split('.');
+  var node = document.createElement(parts[0] || 'div');
+  for (var i = 1; i < parts.length; i++) if (parts[i]) node.classList.add(parts[i]);
+  if (attrs && (Array.isArray(attrs) || typeof attrs === 'string' ||
+                typeof attrs === 'number' || attrs.nodeType)) {
+    kids = attrs; attrs = null;
+  }
+  if (attrs) {
+    Object.keys(attrs).forEach(function (k) {
+      var v = attrs[k];
+      if (v == null || v === false) return;
+      if (k === 'html') node.innerHTML = v;
+      else if (k === 'text') node.textContent = v;
+      else if (k === 'cls') node.className += (node.className ? ' ' : '') + v;
+      else if (k === 'style') node.setAttribute('style', v);
+      else if (k.slice(0, 2) === 'on' && typeof v === 'function') node.addEventListener(k.slice(2), v);
+      else node.setAttribute(k, v);
+    });
+  }
+  add(node, kids);
+  return node;
+}
+
+function add(node, kids) {
+  if (kids == null || kids === false) return node;
+  if (Array.isArray(kids)) { kids.forEach(function (k) { add(node, k); }); return node; }
+  if (typeof kids === 'string' || typeof kids === 'number') {
+    node.appendChild(document.createTextNode(String(kids)));
+    return node;
+  }
+  if (kids.nodeType) node.appendChild(kids);
+  return node;
+}
+
+function mono(t) { return h('span.mono', String(t)); }
+function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); return node; }
+
+/** 자료에서 온 글의 **굵게** 를 <b> 로 바꾼다 (글자는 escape 한 뒤에 바꾼다) */
+function rich(text) {
+  return h('span', { html: md(String(text == null ? '' : text)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')) });
+}
+
+/**
+ * HTML 글에 남은 **굵게** 표시를 <b> 로 바꾼다.
+ * ⚠ 이미 태그가 든 글에 쓰므로 escape 하지 않는다 (rich() 는 escape 한 뒤에 이것을 부른다).
+ * ⚠ 안내 상자는 자료(DATA·JUDGE)의 글을 그대로 받아 html 로 넣는다. 그 자료는 이 앱의
+ *   공통 표기인 **굵게** 를 쓰므로, 상자마다 이 함수를 거치지 않으면 화면에 별표가 그대로 보인다
+ *   (2026-09-04 실제로 형태 안내 상자와 뱃지 힌트 두 곳에서 그랬다).
+ *   새 상자 부품을 만들면 반드시 md() 를 거칠 것 — check.js ③-6 이 확인한다.
+ */
+function md(html) {
+  return String(html == null ? '' : html).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+}
+
+/** 표시용 태그를 걷어 낸 맨 글자 — title 같은 속성 자리에 쓴다 (태그가 안 먹는 곳) */
+function plain(text) {
+  return String(text == null ? '' : text).replace(/\*\*([^*]+)\*\*/g, '$1').replace(/<[^>]*>/g, '');
+}
+
+/* ════════════════════════════════════════════════════════════
+   2. 화면 등록과 수명 관리
+   ════════════════════════════════════════════════════════════ */
+var SCREENS = [];
+/** 화면 하나를 등록한다. {id, tab, title, render(host)} */
+function REG(def) { SCREENS.push(def); }
+
+var LIFE = { resizers: [], timers: [] };
+
+function endScreen() {
+  LIFE.resizers.forEach(function (f) { window.removeEventListener('resize', f); });
+  LIFE.timers.forEach(function (t) { clearInterval(t); });
+  LIFE = { resizers: [], timers: [] };
+}
+
+function onResize(fn) {
+  window.addEventListener('resize', fn);
+  LIFE.resizers.push(fn);
+}
+
+function screenTimer(fn, ms) {
+  var t = setInterval(fn, ms);
+  LIFE.timers.push(t);
+  return t;
+}
+
+/* ════════════════════════════════════════════════════════════
+   3. 학생이 쓴 것을 담아 두는 곳
+   ════════════════════════════════════════════════════════════ */
+var STORE = {
+  vals: {},      // 서술 칸  { data_name: '…' }
+  answers: {},   // 활동의 풀이 상태 (이어서 하기용) · 속성 표
+  scores: {},    // { 'type-sort': {g:8, a:true} }
+  acts: {},      // 서버가 준 활동 기준표
+  fields: {},    // 서버가 준 서술 칸 기준표
+  course: null,  // 이번 차시에 열어 줄 범위 (Code.gs 의 COURSE). null 이면 전부
+  dirty: false,
+  onChange: function () {}
+};
+
+function actOf(key) {
+  var a = STORE.acts[key];
+  if (!a) console.warn('[공공데이터 수집 기록장] 알 수 없는 활동 이름: ' + key);
+  return a || { key: key, tab: 0, max: 0, label: key };
+}
+
+function fieldOf(key) {
+  var f = STORE.fields[key];
+  if (!f) console.warn('[공공데이터 수집 기록장] 알 수 없는 서술 칸: ' + key);
+  return f || { key: key, no: '?', tab: 0, title: key, min: 0 };
+}
+
+/* ── 차시 범위 ────────────────────────────────────────── */
+function courseFieldKeys() {
+  var c = STORE.course;
+  return (c && c.fields && c.fields.length) ? c.fields : Object.keys(STORE.fields);
+}
+function courseActKeys() {
+  var c = STORE.course;
+  return (c && c.acts && c.acts.length) ? c.acts : Object.keys(STORE.acts);
+}
+function inCourse(screenId) {
+  var c = STORE.course;
+  if (!c || !c.screens || !c.screens.length) return true;
+  return c.screens.indexOf(screenId) >= 0;
+}
+
+function getVal(key) { return STORE.vals[key] == null ? '' : STORE.vals[key]; }
+
+function saveVal(key, v) {
+  if (STORE.vals[key] === v) return;
+  STORE.vals[key] = v;
+  STORE.dirty = true;
+  STORE.onChange();
+}
+
+function saveAns(key, value) {
+  STORE.answers[key] = value;
+  STORE.dirty = true;
+  STORE.onChange();
+}
+
+function loadAns(key, def) {
+  var v = STORE.answers[key];
+  return v === undefined ? def : v;
+}
+
+function setScore(key, got, attempted) {
+  var a = actOf(key);
+  var g = Math.max(0, Math.min(a.max, Math.round(got || 0)));
+  var cur = STORE.scores[key];
+  var at = attempted === undefined ? true : !!attempted;
+  if (cur && cur.g === g && cur.a === at) return;
+  STORE.scores[key] = { g: g, a: at };
+  STORE.dirty = true;
+  STORE.onChange();
+}
+
+function getScore(key) { return STORE.scores[key] || { g: 0, a: false }; }
+
+function tabScore(tabNo) {
+  var got = 0, max = 0, tried = 0;
+  courseActKeys().forEach(function (k) {
+    var a = actOf(k);
+    if (a.tab !== tabNo) return;
+    max += a.max;
+    var s = getScore(k);
+    got += s.g;
+    if (s.a) tried++;
+  });
+  return { got: got, max: max, tried: tried };
+}
+
+function totalScore() {
+  var got = 0, max = 0, tried = 0;
+  courseActKeys().forEach(function (k) {
+    var a = actOf(k), s = getScore(k);
+    max += a.max; got += s.g;
+    if (s.a) tried++;
+  });
+  return { got: got, max: max, tried: tried };
+}
+
+/**
+ * 이 학생에게 해당되는 서술 칸.
+ * ⚠ 속성 표(⑦-3)는 정형 데이터일 때만 묻는다. 진행률 분모에서도 빼지 않으면
+ *   비정형을 고른 학생은 아무리 채워도 100% 가 될 수 없다.
+ *   서버의 fieldsFor_() 와 같은 규칙이어야 한다.
+ */
+function activeFieldKeys() {
+  var keys = courseFieldKeys();
+  if (JUDGE.needsAttrs(getVal('dtype'))) return keys;
+  return keys.filter(function (k) { return k !== 'attrs'; });
+}
+
+function fieldStat() {
+  var keys = activeFieldKeys();
+  var filled = 0, enough = 0, chars = 0;
+  keys.forEach(function (k) {
+    var n = JUDGE.len(getVal(k));
+    chars += n;
+    if (n > 0) filled++;
+    if (n >= fieldOf(k).min) enough++;
+  });
+  return { n: keys.length, filled: filled, enough: enough, chars: chars };
+}
+
+function progressPct() {
+  var f = fieldStat(), t = totalScore();
+  var steps = f.n + courseActKeys().length;
+  if (!steps) return 0;
+  return Math.round((f.filled + t.tried) / steps * 1000) / 10;
+}
+
+/* ════════════════════════════════════════════════════════════
+   4. 서술 칸 — 학생이 가장 많이 쓰는 부품
+   ════════════════════════════════════════════════════════════ */
+/**
+ * field('why', {rows:4, ph:'…', short:true, help:'…', onInput:fn})
+ * 글자 수를 세어 기준을 넘으면 초록으로 바뀌고, 뭉뚱그린 표현이 있으면 알려 준다.
+ */
+function field(key, opt) {
+  opt = opt || {};
+  var f = fieldOf(key);
+  var wrap = h('div.fld');
+  var count = h('span.cnt');
+  var warn = h('div.vwarn');
+
+  var box = opt.short
+    ? h('input.ta.one', { type: 'text', value: getVal(key), placeholder: opt.ph || '',
+        'aria-label': f.title })
+    : h('textarea.ta', { rows: opt.rows || 3, placeholder: opt.ph || '', 'aria-label': f.title });
+  if (!opt.short) box.value = getVal(key);
+
+  function paint() {
+    var v = box.value;
+    var n = JUDGE.len(v);
+    var ok = n >= f.min;
+    count.textContent = n + '자 / 기준 ' + f.min + '자';
+    count.className = 'cnt' + (ok ? ' ok' : (n > 0 ? ' part' : ''));
+    box.classList.remove('ok', 'part');
+    if (ok) box.classList.add('ok');
+    else if (n > 0) box.classList.add('part');
+
+    clear(warn);
+    warn.classList.remove('show');
+    if (f.min >= 30) {                      /* 짧은 칸에는 잔소리하지 않는다 */
+      var vg = JUDGE.vague(v);
+      if (vg.length) {
+        warn.classList.add('show');
+        add(warn, '뭉뚱그린 표현이 보입니다 — ');
+        vg.slice(0, 3).forEach(function (w, i) {
+          if (i) add(warn, ', ');
+          add(warn, h('b', '「' + w + '」'));
+        });
+        add(warn, '. 무엇을 가리키는지 구체적으로 적어 주세요.');
+      }
+    }
+  }
+
+  box.addEventListener('input', function () {
+    paint();
+    saveVal(key, box.value);
+    if (opt.onInput) opt.onInput(box.value);
+  });
+
+  wrap.appendChild(h('div.fld-h', [
+    h('b', f.no + ' ' + (opt.title || f.title)),
+    count
+  ]));
+  if (opt.help) wrap.appendChild(h('p.fld-help', { html: md(opt.help) }));
+  wrap.appendChild(box);
+  wrap.appendChild(warn);
+  if (opt.after) wrap.appendChild(opt.after);
+  paint();
+  return wrap;
+}
+
+/**
+ * 고르기가 그대로 서술 칸에 담기는 부품 (데이터 형태 · 이용 조건).
+ * pickField('dtype', ['정형','비정형',…], {onPick:fn, other:true})
+ */
+function pickField(key, options, opt) {
+  opt = opt || {};
+  var f = fieldOf(key);
+  var wrap = h('div.fld');
+  var cur = getVal(key);
+  var cards = h('div.cards');
+  var btns = {};
+
+  function choose(v) {
+    cur = v;
+    Object.keys(btns).forEach(function (k) { btns[k].classList.remove('on'); });
+    if (btns[v]) btns[v].classList.add('on');
+    saveVal(key, v);
+    if (other) other.value = btns[v] ? '' : v;
+    if (opt.onPick) opt.onPick(v);
+  }
+
+  options.forEach(function (o) {
+    var label = typeof o === 'string' ? o : o.label;
+    var b = h('button.dcard' + (cur === label ? '.on' : ''), { type: 'button',
+      onclick: function () { choose(label); } });
+    if (typeof o !== 'string' && o.icon) b.appendChild(h('span.dc-i', o.icon));
+    add(b, label);
+    if (typeof o !== 'string' && o.sub) b.appendChild(h('span.dc-s', o.sub));
+    btns[label] = b;
+    cards.appendChild(b);
+  });
+
+  var other = null;
+  if (opt.other) {
+    other = h('input.ta.one', { type: 'text', placeholder: opt.otherPh || '목록에 없으면 직접 적어 주세요',
+      value: btns[cur] ? '' : cur, 'aria-label': f.title + ' 직접 적기' });
+    other.addEventListener('input', function () {
+      Object.keys(btns).forEach(function (k) { btns[k].classList.remove('on'); });
+      saveVal(key, other.value);
+      if (opt.onPick) opt.onPick(other.value);
+    });
+  }
+
+  wrap.appendChild(h('div.fld-h', [h('b', f.no + ' ' + (opt.title || f.title))]));
+  if (opt.help) wrap.appendChild(h('p.fld-help', { html: md(opt.help) }));
+  wrap.appendChild(cards);
+  if (other) wrap.appendChild(other);
+  return wrap;
+}
+
+/* ── 자기 점검 뱃지 줄 ──────────────────────────────────
+   ⚠ 「채점」이 아니다. 규칙으로 훑어 본 결과라는 것을 화면에 밝힌다.
+   ────────────────────────────────────────────────────── */
+function badgeRow(list, note) {
+  var box = h('div.badges');
+  list.forEach(function (b) {
+    /* ⚠ title 은 속성이라 태그가 안 먹는다 — 표시 기호를 걷어 낸 맨 글자를 넣는다 */
+    var chip = h('span.bdg' + (b.ok ? '.on' : ''), { title: plain(b.hint) },
+      (b.ok ? '✓ ' : '· ') + b.name);
+    box.appendChild(chip);
+  });
+  var wrap = h('div.badgewrap', box);
+  var bad = list.filter(function (b) { return !b.ok; });
+  if (bad.length) {
+    wrap.appendChild(h('p.small.bhint', { html: md('↳ ' + bad[0].hint) }));
+  } else if (note) {
+    wrap.appendChild(h('p.small.bhint.ok', note));
+  }
+  return wrap;
+}
+
+/* ── 속성 표 편집기 ─────────────────────────────────────
+   표(구조)는 answers 에, 사람이 읽을 한 줄 글은 서술 칸에 담는다.
+   ⚠ 서술 칸은 표가 만든다. 표를 고치면 다시 쓰이므로 손으로 고치지 못하게 두었다.
+   ────────────────────────────────────────────────────── */
+function attrTable(key, opt) {
+  opt = opt || {};
+  var f = fieldOf(key);
+  /* 머리글과 예시는 고른 데이터 형태에 따라 바뀐다 (JUDGE.attrPromptOf 가 골라 준다).
+     ⚠ 여기에 정형용 「예: 학생수」 를 박아 두면 반정형·비정형을 고른 학생에게도 그것이 보인다. */
+  var g = opt.guide || {};
+  var PH = g.ph || { name: '예: 학생수', desc: '예: 그 학년의 학생 수', ex: '예: 241' };
+  var HEAD = g.head || '이름 (열·키)';
+  var WHAT = g.what || '무엇을 담는 값인가';
+  var rows = loadAns('attr-rows', null);
+  if (!rows || !rows.length) rows = [blank(), blank(), blank()];
+
+  function blank() { return { name: '', type: '', desc: '', ex: '' }; }
+
+  var wrap = h('div.fld');
+  var host = h('div.attrs');
+  var mirror = h('div.attr-mirror');
+
+  function commit() {
+    saveAns('attr-rows', rows);
+    saveVal(key, JUDGE.attrText(rows));
+    paintMirror();
+    if (opt.onChange) opt.onChange(rows);
+  }
+
+  function paintMirror() {
+    var txt = JUDGE.attrText(rows);
+    var n = JUDGE.attrCount(rows);
+    clear(mirror);
+    mirror.appendChild(h('b', '기록장에 이렇게 담깁니다 (' + n + '가지)'));
+    mirror.appendChild(h('div.attr-text', txt || '(아직 비어 있습니다)'));
+    mirror.classList.remove('ok', 'part');
+    if (n >= 3) mirror.classList.add('ok');
+    else if (n > 0) mirror.classList.add('part');
+  }
+
+  function paint() {
+    clear(host);
+    var head = h('div.attr-row.head', [
+      h('span.a1', HEAD), h('span.a2', '자료형'),
+      h('span.a3', WHAT), h('span.a4', '예시값'), h('span.a5', '')
+    ]);
+    host.appendChild(head);
+
+    rows.forEach(function (r, i) {
+      var nm = h('input.ai', { type: 'text', value: r.name, placeholder: PH.name,
+        'aria-label': (i + 1) + '번째 이름' });
+      var ty = h('select.as', { 'aria-label': (i + 1) + '번째 자료형' });
+      ty.appendChild(h('option', { value: '' }, '고르기'));
+      (DATA.attrTypes || []).forEach(function (t) {
+        ty.appendChild(h('option', { value: t }, t));
+      });
+      ty.value = r.type || '';
+      var ds = h('input.ai', { type: 'text', value: r.desc, placeholder: PH.desc,
+        'aria-label': (i + 1) + '번째 설명' });
+      var ex = h('input.ai', { type: 'text', value: r.ex, placeholder: PH.ex,
+        'aria-label': (i + 1) + '번째 예시값' });
+      var del = h('button.xbtn', { type: 'button', title: '이 줄 지우기',
+        'aria-label': (i + 1) + '번째 줄 지우기',
+        onclick: function () {
+          rows.splice(i, 1);
+          if (!rows.length) rows.push(blank());
+          commit(); paint();
+        } }, '×');
+
+      nm.addEventListener('input', function () { r.name = nm.value; commit(); });
+      ty.addEventListener('change', function () { r.type = ty.value; commit(); });
+      ds.addEventListener('input', function () { r.desc = ds.value; commit(); });
+      ex.addEventListener('input', function () { r.ex = ex.value; commit(); });
+
+      host.appendChild(h('div.attr-row', [
+        h('span.a1', nm), h('span.a2', ty), h('span.a3', ds), h('span.a4', ex), h('span.a5', del)
+      ]));
+    });
+
+    host.appendChild(h('div.row.tight', [
+      h('button.btn.ghost.sm', { type: 'button', onclick: function () {
+        rows.push(blank()); commit(); paint();
+      } }, '＋ 줄 더하기')
+    ]));
+  }
+
+  wrap.appendChild(h('div.fld-h', [h('b', f.no + ' ' + (opt.title || f.title))]));
+  if (opt.help) wrap.appendChild(h('p.fld-help', { html: md(opt.help) }));
+  wrap.appendChild(host);
+  wrap.appendChild(mirror);
+  paint();
+  paintMirror();
+  /* 처음 그릴 때는 저장을 건드리지 않는다 — 학생이 아무것도 안 했는데 「저장 중」이 뜨면 이상하다 */
+  return wrap;
+}
+
+/* ════════════════════════════════════════════════════════════
+   5. 채점 위젯 — 모든 [확인] 단추가 이것을 쓴다
+   ════════════════════════════════════════════════════════════ */
+/**
+ * grader('type-sort') 를 만들고
+ *   g.sel(고를값들, 정답, 옵션)  → <select>
+ *   g.pick(보기배열, 정답, 옵션) → 여러 보기 가운데 하나 고르기 (기본 선택 없음)
+ *   g.custom({node, get, cmp, set, mark})
+ *   g.controls() / g.verdict()
+ * ⚠ 등록한 칸 수와 서버 ACTIVITIES 의 max 가 같아야 한다 — 다르면 콘솔에 경고가 뜬다.
+ */
+function grader(key, opt) {
+  opt = opt || {};
+  var items = [], vbox = null, host = { key: key };
+  var saved = loadAns(key, null);
+
+  function slot(i) { return (saved && saved[i] !== undefined) ? saved[i] : ''; }
+  function collect() { return items.map(function (it) { return it.get(); }); }
+  function register(it) { items.push(it); return items.length - 1; }
+
+  host.sel = function (options, ans, o) {
+    o = o || {};
+    var i = items.length;
+    var sel = h('select.bl', { 'aria-label': o.label || ('고르기 ' + (i + 1)),
+      onchange: function () { sel.classList.remove('ok', 'no'); } });
+    sel.appendChild(h('option', { value: '' }, o.ph || '고르기'));
+    options.forEach(function (v) { sel.appendChild(h('option', { value: String(v) }, String(v))); });
+    sel.value = slot(i);
+    register({
+      node: sel,
+      get: function () { return sel.value; },
+      set: function (v) { sel.value = v == null ? '' : v; },
+      cmp: function (v) { return String(v) === String(ans); },
+      mark: function (ok) { sel.classList.remove('ok', 'no'); sel.classList.add(ok ? 'ok' : 'no'); },
+      answer: String(ans)
+    });
+    return sel;
+  };
+
+  host.pick = function (options, ans, o) {
+    o = o || {};
+    var i = items.length;
+    var cur = slot(i);
+    var wrap = h('div.cards' + (o.cls ? '.' + o.cls : ''));
+    var btns = {};
+    options.forEach(function (lab) {
+      var b = h('button.dcard', { type: 'button' }, lab);
+      if (cur === lab) b.classList.add('on');
+      b.addEventListener('click', function () {
+        cur = lab;
+        Object.keys(btns).forEach(function (k) { btns[k].classList.remove('on', 'ok', 'no'); });
+        b.classList.add('on');
+        if (o.onPick) o.onPick(lab);
+      });
+      btns[lab] = b;
+      wrap.appendChild(b);
+    });
+    register({
+      node: wrap,
+      get: function () { return cur; },
+      set: function (v) { if (btns[v]) btns[v].click(); },
+      cmp: function (v) { return String(v) === String(ans); },
+      mark: function (ok) {
+        if (!cur || !btns[cur]) return;
+        btns[cur].classList.remove('on');
+        btns[cur].classList.add(ok ? 'ok' : 'no');
+      },
+      answer: String(ans)
+    });
+    return wrap;
+  };
+
+  host.custom = function (spec) {
+    register({
+      node: spec.node || null,
+      get: spec.get,
+      set: spec.set || function () {},
+      cmp: spec.cmp,
+      mark: spec.mark || function () {},
+      answer: spec.answer == null ? '' : spec.answer
+    });
+    return spec.node || null;
+  };
+
+  host.verdict = function () {
+    if (!vbox) vbox = h('div.verdict', { role: 'status', 'aria-live': 'polite' });
+    return vbox;
+  };
+
+  /** 채점 — silent 를 주면 화면을 건드리지 않고 점수만 계산한다 */
+  host.check = function (silent) {
+    var vals = collect(), got = 0;
+    items.forEach(function (it, i) {
+      var ok = false;
+      try { ok = !!it.cmp(vals[i]); } catch (e) { ok = false; }
+      if (ok) got++;
+      if (!silent) it.mark(ok);
+    });
+    var max = actOf(key).max;
+    saveAns(key, vals);
+    setScore(key, got, true);
+    if (!silent) {
+      var v = host.verdict();
+      v.className = 'verdict show ' + (got === items.length ? 'ok' : (got > 0 ? 'part' : 'no'));
+      v.textContent = got === items.length
+        ? '모두 맞았습니다. ' + got + ' / ' + items.length + '점'
+        : got + ' / ' + items.length + '점 — 틀린 곳을 다시 살펴보세요.';
+      if (items.length !== max) {
+        console.warn('[공공데이터 수집 기록장] ' + key + ' 의 칸 수(' + items.length +
+                     ')와 만점(' + max + ')이 다릅니다.');
+      }
+      if (opt.onCheck) opt.onCheck(got, items.length);
+    }
+    return { got: got, of: items.length };
+  };
+
+  host.reveal = function () {
+    items.forEach(function (it) { if (it.set) it.set(it.answer); });
+    host.check();
+    var v = host.verdict();
+    v.className = 'verdict show part';
+    v.textContent = '정답을 채웠습니다. 점수는 방금 [확인] 을 눌렀을 때의 결과로 남습니다. ' +
+                    '왜 그렇게 되는지 설명을 다시 읽어 보세요.';
+  };
+
+  host.reset = function () {
+    items.forEach(function (it) {
+      if (it.set) it.set('');
+      if (it.node && it.node.classList) it.node.classList.remove('ok', 'no');
+      if (it.node && it.node.querySelectorAll) {
+        Array.prototype.forEach.call(it.node.querySelectorAll('.dcard'), function (b) {
+          b.classList.remove('on', 'ok', 'no');
+        });
+      }
+    });
+    var v = host.verdict();
+    v.className = 'verdict';
+    v.textContent = '';
+  };
+
+  host.controls = function (o) {
+    o = o || {};
+    var row = h('div.row');
+    row.appendChild(h('button.btn', { type: 'button', onclick: function () { host.check(); } }, '확인'));
+    if (!o.noReveal) {
+      row.appendChild(h('button.btn.ghost', { type: 'button', onclick: function () {
+        ask('정답 보기', '정답을 채워 볼까요?<br>지금까지 [확인] 으로 받은 점수는 <b>그대로 남습니다</b>.',
+            function () { host.reveal(); }, '정답 채우기');
+      } }, '정답 보기'));
+    }
+    row.appendChild(h('button.btn.gray', { type: 'button', onclick: function () { host.reset(); } }, '다시 하기'));
+    row.appendChild(h('span.small.grow', { style: 'text-align:right' },
+      '만점 ' + actOf(key).max + '점'));
+    return row;
+  };
+
+  host.count = function () { return items.length; };
+  host.restore = function () { if (saved) host.check(true); };
+  return host;
+}
+
+/** 활동 하나의 현재 점수 배지 */
+function scoreBadge(key) {
+  var a = actOf(key), s = getScore(key);
+  var cls = s.g === a.max ? 'ok' : (s.a ? 'part' : 'no');
+  return h('span.badge.' + cls, s.a ? (s.g + ' / ' + a.max + '점') : ('아직 안 함 · ' + a.max + '점'));
+}
+
+/* ════════════════════════════════════════════════════════════
+   6. 자주 쓰는 상자
+   ════════════════════════════════════════════════════════════ */
+function goalBox(lines) {
+  return h('div.goal', [
+    h('b', '이 화면에서 할 일'),
+    h('ul', lines.map(function (t) { return h('li', { html: md(t) }); }))
+  ]);
+}
+function noteBox(html) { return h('div.note', { html: md(html) }); }
+function tipBox(html) { return h('div.tip', { html: md(html) }); }
+function askBox(html) { return h('div.ask', { html: md(html) }); }
+function badBox(html) { return h('div.warnbox', { html: md(html) }); }
+
+function card(title, kids) {
+  var c = h('div.card');
+  if (title) c.appendChild(h('h2', title));
+  add(c, kids);
+  return c;
+}
+function moreBox(title, kids) {
+  var d = h('details.more');
+  d.appendChild(h('summary', title));
+  add(d, kids);
+  return d;
+}
+function table(head, rows, opt) {
+  opt = opt || {};
+  var t = h('table.t');
+  if (head) {
+    var thead = h('thead'), tr = h('tr');
+    head.forEach(function (x) { add(tr, h('th' + (opt.leftHead ? '.l' : ''), x && x.nodeType ? x : String(x))); });
+    thead.appendChild(tr); t.appendChild(thead);
+  }
+  var tb = h('tbody');
+  rows.forEach(function (r) {
+    var tr2 = h('tr');
+    r.forEach(function (c, i) {
+      var td = h('td' + (opt.left && opt.left.indexOf(i) >= 0 ? '.l' : ''));
+      add(td, c && c.nodeType ? c : (c == null ? '' : String(c)));
+      tr2.appendChild(td);
+    });
+    tb.appendChild(tr2);
+  });
+  t.appendChild(tb);
+  return h('div.tw', t);
+}
+
+/** 바깥 사이트로 나가는 링크 — 새 창으로 열고, 어디로 가는지 밝힌다 */
+function linkOut(url, label) {
+  return h('a.out', { href: url, target: '_blank', rel: 'noopener noreferrer' },
+    (label || url) + ' ↗');
+}
+
+/** 코드·파일 조각 미리보기 */
+function codeBox(text, kind) {
+  return h('pre.code' + (kind ? '.' + kind : ''), String(text));
+}
+
+/* ════════════════════════════════════════════════════════════
+   7. 앱 안에서 뜨는 창 (alert·confirm·prompt 를 대신한다)
+   ════════════════════════════════════════════════════════════ */
+var MODAL = null;
+
+/**
+ * modal({ title, text(HTML 가능), fields:[{key,label,type,ph}], ok, cancel,
+ *         onOk:function(values){ return '오류 문구' 또는 아무것도 } })
+ * onOk 가 문구를 돌려주면 창이 닫히지 않는다.
+ */
+function modal(opt) {
+  opt = opt || {};
+  if (MODAL) closeModal();
+
+  var inputs = {};
+  var err = h('div.mdl-err');
+  var body = h('div.mdl');
+
+  body.appendChild(h('h3', opt.title || '알림'));
+  if (opt.text) body.appendChild(h('p.mdl-t', { html: opt.text }));
+  if (opt.node) body.appendChild(opt.node);
+
+  (opt.fields || []).forEach(function (f) {
+    body.appendChild(h('label.mdl-l', f.label));
+    var inp = h('input.mdl-i', { type: f.type || 'text', placeholder: f.ph || '',
+      'aria-label': f.label });
+    inputs[f.key] = inp;
+    body.appendChild(inp);
+  });
+  body.appendChild(err);
+
+  function values() {
+    var v = {};
+    Object.keys(inputs).forEach(function (k) { v[k] = inputs[k].value; });
+    return v;
+  }
+  function go() {
+    var msg = opt.onOk ? opt.onOk(values()) : null;
+    if (msg) { err.textContent = msg; err.classList.add('show'); return; }
+    closeModal();
+  }
+
+  var row = h('div.mdl-btns');
+  if (opt.cancel !== null) {
+    row.appendChild(h('button.btn.gray', { type: 'button', onclick: function () {
+      closeModal();
+      if (opt.onCancel) opt.onCancel();
+    } }, opt.cancel || '취소'));
+  }
+  var okBtn = h('button.btn', { type: 'button', onclick: go }, opt.ok || '확인');
+  row.appendChild(okBtn);
+  body.appendChild(row);
+
+  Object.keys(inputs).forEach(function (k) {
+    inputs[k].addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
+  });
+
+  MODAL = h('div.mdl-back', { onclick: function (e) { if (e.target === MODAL) closeModal(); } }, body);
+  MODAL._esc = function (e) { if (e.key === 'Escape') closeModal(); };
+  document.addEventListener('keydown', MODAL._esc);
+  document.body.appendChild(MODAL);
+
+  var first = Object.keys(inputs)[0];
+  setTimeout(function () { (first ? inputs[first] : okBtn).focus(); }, 40);
+  return { close: closeModal };
+}
+
+function closeModal() {
+  if (!MODAL) return;
+  document.removeEventListener('keydown', MODAL._esc);
+  if (MODAL.parentNode) MODAL.parentNode.removeChild(MODAL);
+  MODAL = null;
+}
+
+/** 알려 주기만 하는 창 */
+function say(title, text, after) {
+  modal({ title: title, text: text, cancel: null, ok: '확인',
+          onOk: function () { if (after) setTimeout(after, 0); } });
+}
+
+/** 물어보는 창 — 「예」를 누르면 onYes 를 부른다 */
+function ask(title, text, onYes, okLabel) {
+  modal({ title: title, text: text, ok: okLabel || '네', cancel: '아니요',
+          onOk: function () { setTimeout(onYes, 0); } });
+}
+
+var TOAST = null;
+function toast(msg) {
+  if (!TOAST) { TOAST = h('div.toast'); document.body.appendChild(TOAST); }
+  TOAST.textContent = msg;
+  TOAST.classList.add('show');
+  clearTimeout(TOAST._t);
+  TOAST._t = setTimeout(function () { TOAST.classList.remove('show'); }, 2100);
+}
+
+function bar(pct, green) {
+  return h('div.bar' + (green ? '.g' : ''),
+    h('i', { style: 'width:' + Math.max(0, Math.min(100, pct)) + '%' }));
+}
+
+/** 이름 없이 개수만 보여 주는 막대 목록 */
+function distBars(rows) {
+  var top = 1;
+  rows.forEach(function (r) { top = Math.max(top, r.count); });
+  var box = h('div.dist');
+  rows.forEach(function (r) {
+    box.appendChild(h('div.dist-row', [
+      h('span.dist-n', r.name),
+      h('span.dist-b', h('i', { style: 'width:' + Math.round(r.count / top * 100) + '%' })),
+      h('span.dist-c', r.count + '명')
+    ]));
+  });
+  return box;
+}
+
+/** 다른 화면으로 보내는 작은 단추 */
+function goBtn(screenId, label) {
+  return h('button.btn.ghost.sm', { type: 'button',
+    onclick: function () { showScreen(screenId); } }, label);
+}
+</script>

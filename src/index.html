@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<!--
+  공공데이터 수집 기록장 — 공공·민간 데이터를 찾아보고 수집한 데이터의 기본 정보를 기록하는 앱
+  © 2026 티쳐무 · 모든 권리 보유 (오픈소스 라이선스 없음)
+  학교 수업 목적으로만 이용해 주세요. 그 밖의 이용은 먼저 문의해 주세요.
+  「데이터 과학」 [12데과02-01] 성취기준 수업용.
+-->
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <!-- 앱스 스크립트는 이 meta 를 지우고 Code.gs 의 addMetaTag 로 다시 넣는다.
+       여기 적어 두는 것은 dist/preview.html 을 브라우저에서 볼 때를 위한 것이다. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base target="_top">
+  <title>공공데이터 수집 기록장</title>
+  <?!= include('css'); ?>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <h1>공공데이터 수집 기록장</h1>
+    <span class="small" style="color:#d6e6f6">데이터 과학 · 데이터 수집</span>
+    <div class="who" id="who"></div>
+  </div>
+</header>
+
+<nav class="tabs"><div class="tabs-in" id="tabs" style="display:none"></div></nav>
+<div class="pills" id="pills" style="display:none"></div>
+
+<div class="gate" id="gate" style="display:none"></div>
+
+<main class="wrap" id="main" style="display:none">
+  <div id="body"></div>
+</main>
+
+<footer>
+  <div class="in">
+    <b>공공데이터 수집 기록장</b><br>
+    © 2026 티쳐무 · 모든 권리 보유. 학교 수업 목적으로만 이용해 주세요.
+    오픈소스 라이선스를 붙이지 않았으므로 별도 허락이 없으면 저작권자가 모든 권리를 가집니다.<br>
+    <span class="small">학번과 이름만 사용하며 그 밖의 개인정보는 수집·저장하지 않습니다.
+    비밀번호는 SHA-256 해시로만 저장됩니다. 우리 반 분포는 이름 없이 개수만 셉니다.</span>
+  </div>
+</footer>
+
+<?!= include('data'); ?>
+<?!= include('judge'); ?>
+<?!= include('core'); ?>
+<?!= include('s1'); ?>
+<?!= include('s2'); ?>
+<script>var BOOT_DATA = <?!= BOOT ?>;</script>
+<?!= include('boot'); ?>
+
+</body>
+</html>

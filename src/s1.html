@@ -1,0 +1,552 @@
+<!--
+  공공데이터 수집 기록장 — Ⅰ 기록하기 (화면 5개)
+  © 2026 티쳐무 · 모든 권리 보유
+
+  🎯 관심 분야 / 🔗 데이터와 출처 / 💡 수집한 이유 / 🧩 데이터 형태 / 📊 무엇이 들어 있나
+-->
+<script>
+
+/* 사이트 카드 하나 — 도감과 안내에서 함께 쓴다 */
+function siteCard(s) {
+  var c = h('div.site');
+  c.appendChild(h('div.site-h', [
+    h('b', s.name),
+    h('span.site-org', s.org)
+  ]));
+  c.appendChild(h('p.site-w', rich(s.what)));
+  c.appendChild(h('div.row.tight', [linkOut(s.url, s.url.replace(/^https?:\/\//, ''))]));
+  c.appendChild(moreBox('자세히 보기', [
+    table(null, [
+      ['이럴 때 좋다', rich(s.good)],
+      ['주는 형태', s.forms],
+      ['알아 둘 것', rich(s.tip)],
+      ['확인한 날', s.checked]
+    ], { left: [0, 1], leftHead: true })
+  ]));
+  return c;
+}
+
+/* ══════════════════════════════════════════════════════════
+   ① 관심 분야 — 어떤 갈래의 데이터를 찾을지 좁힌다
+   ══════════════════════════════════════════════════════════ */
+REG({
+  id: 'interest', tab: 1, title: '🎯 관심 분야',
+  render: function (host) {
+
+    /* ── 1. 분야 고르기 ─────────────────────────────── */
+    var hintBox = h('div.hintbox');
+
+    function paintHint() {
+      var cur = getVal('interest');
+      var f = null;
+      (DATA.interests || []).forEach(function (x) { if (x.name === cur) f = x; });
+      clear(hintBox);
+      if (!f) {
+        hintBox.appendChild(h('p.small', '분야를 하나 고르면 어떤 데이터를 찾을 수 있는지 알려 드립니다. ' +
+          '목록에 없으면 아래 칸에 직접 적어도 됩니다.'));
+        return;
+      }
+      hintBox.appendChild(h('h3', f.icon + ' ' + f.name + ' 분야에서는 이런 것을 찾을 수 있습니다'));
+      hintBox.appendChild(h('ul.hint-ul', f.examples.map(function (e) { return h('li', e); })));
+      hintBox.appendChild(h('p.small', { html:
+        '⚠ 위는 <b>「이런 것이 있다」는 안내</b>이지 실제 데이터 이름이 아닙니다. ' +
+        '아래 검색어로 직접 찾아보세요.' }));
+
+      var kw = h('div.row.tight', [h('span.small', '검색어로 써 볼 말: ')]);
+      f.keywords.forEach(function (k) { kw.appendChild(h('span.kw', k)); });
+      hintBox.appendChild(kw);
+
+      var sites = h('div.row.tight', [h('span.small', '먼저 가 볼 곳: ')]);
+      f.sites.forEach(function (key) {
+        (DATA.sites || []).forEach(function (s) {
+          if (s.key === key) sites.appendChild(linkOut(s.url, s.name));
+        });
+      });
+      hintBox.appendChild(sites);
+    }
+
+    host.appendChild(card('🎯 관심 분야 고르기', [
+      pickField('interest', (DATA.interests || []).map(function (f) {
+        return { label: f.name, icon: f.icon };
+      }), {
+        help: '공공데이터포털이 데이터를 나누어 둔 열여섯 갈래입니다. 이 가운데 고르면 포털에서 찾기 쉽습니다.',
+        other: true,
+        otherPh: '목록에 없는 분야라면 직접 적어 주세요 (예: 반려동물)',
+        onPick: function () { paintHint(); }
+      }),
+      hintBox
+    ]));
+
+    paintHint();
+
+    /* ── 2. 사이트 도감 ─────────────────────────────── */
+    var pub = (DATA.sites || []).filter(function (s) { return s.kind === 'public'; });
+    var pri = (DATA.sites || []).filter(function (s) { return s.kind === 'private'; });
+
+    /* ⚠ 화면에서 「지금은 쓸 수 없는 곳」 상자를 뺐다 (2026-09-03 사용자 지시).
+       DATA.deadSites 자체는 그대로 둔다 — JUDGE.url() 이 학생이 그 주소를 출처로 적을 때
+       막아 주는 데 쓰이기 때문이다. 도감에도 섞이지 않는다. */
+    host.appendChild(card('🗂 어디서 찾을까 — 데이터 사이트 도감', [
+      h('h3', '공공 데이터'),
+      h('p.small', '나라·지방자치단체·공공기관이 만들어 공개한 데이터입니다. 대부분 무료입니다.'),
+      h('div.grid2', pub.map(siteCard)),
+      h('h3', '민간 데이터'),
+      h('p.small', { html: '기업이나 개인이 모아 공개한 데이터입니다. ' +
+        '<b>이용 조건을 반드시 확인</b>해야 하고, 어떤 사람들의 기록인지도 살펴야 합니다.' }),
+      h('div.grid2', pri.map(siteCard))
+    ]));
+
+    /* ── 3. 연습: 어디서 찾을까 ──────────────────────── */
+    var g = grader('site-match');
+    var rows = (DATA.siteQuiz || []).map(function (q, i) {
+      return [(i + 1), q.q, g.sel(DATA.siteChoices, q.a, { label: (i + 1) + '번 답' })];
+    });
+    var whyBox = h('div');
+
+    host.appendChild(card('🔎 연습 — 이 데이터는 어디서 찾을까?', [
+      goalBox(['다섯 가지를 어디서 찾을 수 있을지 골라 보세요.',
+               '헷갈리면 위 도감의 <b>「이럴 때 좋다」</b> 를 다시 읽어 보세요.']),
+      table(['', '찾고 싶은 것', '어디서?'], rows, { left: [1] }),
+      g.controls(),
+      g.verdict(),
+      whyBox
+    ]));
+
+    /* 확인을 누르면 풀이를 펼친다 */
+    var origCheck = g.check;
+    g.check = function (silent) {
+      var r = origCheck(silent);
+      if (!silent) {
+        clear(whyBox);
+        whyBox.appendChild(h('h3', '풀이'));
+        (DATA.siteQuiz || []).forEach(function (q, i) {
+          whyBox.appendChild(h('div.why', [
+            h('b', (i + 1) + '. ' + q.a),
+            h('p.small', q.why)
+          ]));
+        });
+      }
+      return r;
+    };
+    g.restore();
+  }
+});
+
+/* ══════════════════════════════════════════════════════════
+   ② 데이터와 출처 — 이름 · 기관 · 링크 · 이용 조건
+   ══════════════════════════════════════════════════════════ */
+REG({
+  id: 'source', tab: 1, title: '🔗 데이터와 출처',
+  render: function (host) {
+
+    /* 링크 점검 상자 */
+    var urlBox = h('div.urlbox');
+    function paintUrl() {
+      var v = getVal('source_url');
+      var r = JUDGE.url(v);
+      clear(urlBox);
+      if (!JUDGE.len(v)) {
+        urlBox.appendChild(h('p.small', '주소를 붙이면 여기에서 바로 살펴봐 드립니다.'));
+        return;
+      }
+      urlBox.className = 'urlbox ' + r.level;
+      urlBox.appendChild(h('b',
+        r.level === 'ok' ? '✓ 좋습니다' : (r.level === 'warn' ? '△ 고치면 더 좋습니다' : '✗ 이대로는 어렵습니다')));
+      if (r.host) urlBox.appendChild(h('span.mono.urlhost', r.host));
+      r.msgs.forEach(function (m) { urlBox.appendChild(h('p.small', rich(m))); });
+      if (r.level !== 'bad') {
+        urlBox.appendChild(h('div.row.tight', [
+          linkOut(v.split(/\s+/)[0], '이 주소 열어 보기')
+        ]));
+      }
+      urlBox.appendChild(h('p.small.dim',
+        '※ 이 점검은 주소의 「모양」만 봅니다. 정말 열리는지는 직접 눌러 확인하세요.'));
+    }
+
+    /* 기관 이름 예시 — 누르면 칸에 들어간다 */
+    var orgChips = h('div.chips');
+
+    host.appendChild(card('🔗 어떤 데이터를 어디서 가져왔나', [
+      goalBox([
+        '데이터를 찾은 <b>사이트의 데이터 상세 페이지</b>를 열어 두고 적으면 쉽습니다.',
+        '이름·기관·주소는 <b>화면에 적힌 그대로</b> 옮깁니다. 줄여 쓰지 않습니다.',
+        '이용 조건(저작권)을 반드시 확인합니다.'
+      ]),
+
+      field('data_name', { short: true,
+        ph: '예: 전국 버스정류장 위치정보 (표준 데이터)',
+        help: '사이트에 적힌 데이터 이름을 <b>그대로</b> 옮겨 적습니다. ' +
+              '「버스 데이터」처럼 내 마음대로 줄이면 나중에 다시 찾지 못합니다.' }),
+
+      field('provider', { short: true,
+        ph: '예: 국토교통부',
+        help: '데이터를 <b>만들어 준 곳</b>입니다. 상세 페이지의 「제공기관」을 봅니다. ' +
+              '공공데이터포털은 데이터를 모아 둔 곳이지 만든 곳이 아닙니다.',
+        after: orgChips }),
+
+      field('source_url', { short: true,
+        ph: 'https://…',
+        help: '데이터 <b>상세 페이지</b>의 주소를 주소 표시줄에서 복사해 붙입니다.',
+        after: urlBox,
+        onInput: function () { paintUrl(); } }),
+
+      tipBox('<b>어떤 주소를 붙여야 하나</b><br>' +
+        '○ 데이터 상세 페이지 — 설명·기관·이용 조건이 함께 보인다<br>' +
+        '△ 파일을 바로 내려받는 주소 — 눌러도 설명이 안 보인다<br>' +
+        '✗ 검색 결과 주소 — 나중에 열면 결과가 달라져 있다<br>' +
+        '✗ 내 컴퓨터 안의 파일 경로 — 다른 사람은 열 수 없다'),
+
+      h('div.hr'),
+
+      pickField('license', (DATA.licenses || []).map(function (l) {
+        return { label: l.key, sub: l.mark };
+      }), {
+        help: '데이터 상세 페이지에서 <b>「이용허락범위」</b> 를 찾아 그대로 고릅니다. ' +
+              '민간 사이트라면 「사이트 이용약관을 따름」 을 고르고 약관을 읽어 보세요.'
+      }),
+
+      table(['유형', '표시', '무엇을 할 수 있나'],
+        (DATA.licenses || []).map(function (l) { return [l.short, l.mark, l.can]; }),
+        { left: [2] }),
+
+      h('p.small', { html: '공공누리에 대해 더 알고 싶으면 → ' }),
+      h('div.row.tight', [linkOut(DATA.kogl, '공공누리 누리집')]),
+
+      noteBox('<b>왜 이용 조건을 확인해야 하나요?</b><br>' +
+        '수업 시간에 보는 것은 대개 괜찮습니다. 그런데 만든 결과를 ' +
+        '<b>누리집에 올리거나 발표 자료로 나누어 주면</b> 이야기가 달라집니다. ' +
+        '출처를 밝혀야 하는지, 고쳐 써도 되는지가 데이터마다 다릅니다. ' +
+        '수업 자료에도 「출처, 무료 여부, 상업적 사용 가능 여부 확인」·「이용 약관 준수 필수」 라고 적혀 있습니다.')
+    ]));
+
+    (DATA.orgs || []).forEach(function (o) {
+      orgChips.appendChild(h('button.chipbtn', { type: 'button', onclick: function () {
+        saveVal('provider', o);
+        showScreen('source');           /* 값이 바뀌었으니 다시 그린다 */
+      } }, o));
+    });
+
+    paintUrl();
+  }
+});
+
+/* ══════════════════════════════════════════════════════════
+   ③ 수집한 이유 — 「그냥」은 이유가 아니다
+   ══════════════════════════════════════════════════════════ */
+REG({
+  id: 'reason', tab: 1, title: '💡 수집한 이유',
+  render: function (host) {
+    var badges = h('div');
+    function paint() {
+      clear(badges);
+      badges.appendChild(badgeRow(JUDGE.whyBadges(getVal('why')),
+        '세 가지를 모두 담았습니다. 좋은 이유입니다.'));
+    }
+
+    var picked = getVal('data_name');
+
+    host.appendChild(card('💡 왜 이 데이터를 골랐나요?', [
+      goalBox([
+        '내가 <b>궁금한 것</b>과 ②번의 <b>데이터</b>를 이어 주는 칸입니다.',
+        '「이 데이터에 무엇이 들어 있어서 그 물음에 답할 수 있는지」 를 적습니다.'
+      ]),
+
+      picked ? h('div.recall', [
+        h('span.recall-l', '② 에 적은 데이터'),
+        h('p', picked)
+      ]) : null,
+
+      h('div.frame', [
+        h('b', '이렇게 이으면 됩니다'),
+        h('p.frame-t', { html:
+          '나는 <span class="blank">(궁금한 것)</span> 이 궁금하다.<br>' +
+          '이 데이터에는 <span class="blank">(어떤 값)</span> 이 들어 있어서,<br>' +
+          '<span class="blank">(어떻게)</span> 하면 그 물음에 답할 수 있다.' })
+      ]),
+
+      field('why', {
+        rows: 5,
+        ph: '예: 학교 주변 통학이 불편하다는 이야기가 많은데 느낌이 아니라 숫자로 확인하고 싶었다. ' +
+            '이 데이터에는 정류장마다 위도·경도가 들어 있어서 학교와의 거리를 계산할 수 있고, ' +
+            '걸어서 5분 안에 몇 곳이 있는지 직접 셀 수 있다.',
+        onInput: function () { paint(); }
+      }),
+      badges,
+
+      moreBox('아쉬운 예와 좋은 예를 견주어 보기', [
+        table(['', '쓴 글', '왜 그런가'], [
+          ['✗ 아쉬움', '그냥 교통에 관심이 있어서 골랐다.',
+           '「그냥」·「관심이 있어서」 는 이유가 아니라 인상입니다. 데이터 이야기가 하나도 없습니다.'],
+          ['△ 보통', '우리 동네 버스정류장이 궁금해서 골랐다.',
+           '물음은 있지만, 그 데이터로 어떻게 답할 수 있는지가 없습니다.'],
+          ['○ 좋음', '통학이 불편하다는 말을 숫자로 확인하고 싶었다. 이 데이터에는 정류장마다 위도·경도가 ' +
+           '있어서 학교와의 거리를 계산할 수 있다.',
+           '물음 → 데이터에 들어 있는 값 → 어떻게 답하는지가 모두 이어져 있습니다.']
+        ], { left: [1, 2] })
+      ])
+    ]));
+
+    paint();
+  }
+});
+
+/* ══════════════════════════════════════════════════════════
+   ④ 데이터 형태 — 정형 · 비정형 · 반정형 · 동적
+   ══════════════════════════════════════════════════════════ */
+REG({
+  id: 'type', tab: 1, title: '🧩 데이터 형태',
+  render: function (host) {
+
+    /* ── 형태 네 가지 설명 ─────────────────────────── */
+    var view = loadAns('type-view', (DATA.types[0] || {}).key);
+    var detail = h('div.tdetail');
+    var tabsRow = h('div.cards');
+
+    function paintDetail() {
+      var t = null;
+      (DATA.types || []).forEach(function (x) { if (x.key === view) t = x; });
+      if (!t) t = DATA.types[0];
+      clear(detail);
+      detail.appendChild(h('h3', t.icon + ' ' + t.name));
+      detail.appendChild(h('p.small.dim', t.en + ' · ' + t.formats));
+      detail.appendChild(h('p', rich(t.what)));
+      detail.appendChild(table(null, [
+        ['어떻게 다루나', rich(t.how)],
+        ['왜 쓰나', rich(t.why)]
+      ], { left: [0, 1], leftHead: true }));
+      detail.appendChild(h('p.small', '이렇게 생겼습니다 ↓'));
+      detail.appendChild(codeBox(t.preview, t.previewKind));
+    }
+
+    (DATA.types || []).forEach(function (t) {
+      var b = h('button.dcard' + (t.key === view ? '.on' : ''), { type: 'button',
+        onclick: function () {
+          view = t.key;
+          saveAns('type-view', view);
+          Array.prototype.forEach.call(tabsRow.children, function (c) { c.classList.remove('on'); });
+          b.classList.add('on');
+          paintDetail();
+        } });
+      b.appendChild(h('span.dc-i', t.icon));
+      add(b, t.name);
+      tabsRow.appendChild(b);
+    });
+    paintDetail();
+
+    host.appendChild(card('🧩 데이터는 네 가지 모습으로 온다', [
+      goalBox([
+        '네 가지를 하나씩 눌러 <b>실제로 어떻게 생겼는지</b> 보세요.',
+        '내가 받은 데이터의 <b>파일 형식</b>을 적으면 형태를 짐작해 드립니다.',
+        '마지막에 여덟 가지를 나누어 보는 연습이 있습니다.'
+      ]),
+      tabsRow,
+      detail,
+      noteBox('<b>딱 잘리지 않는다는 것도 함께 알아 두세요.</b><br>' + DATA.typeOverlap)
+    ]));
+
+    /* ── 내 데이터의 형태 고르기 ────────────────────── */
+    var guessBox = h('div.guessbox');
+    var misBox = h('div');
+
+    function paintGuess() {
+      var g = JUDGE.guessType(getVal('dformat'));
+      clear(guessBox);
+      if (!g) {
+        guessBox.appendChild(h('p.small', '형식을 적으면 (CSV·JSON·API…) 어떤 형태인지 짐작해 드립니다.'));
+      } else {
+        guessBox.className = 'guessbox on';
+        guessBox.appendChild(h('b', '짐작: ' + g.type + ' 데이터'));
+        guessBox.appendChild(h('p.small', g.why + ' 다만 마지막에 고르는 사람은 여러분입니다.'));
+      }
+      paintMis();
+    }
+
+    function paintMis() {
+      var m = JUDGE.typeMismatch(getVal('dtype'), getVal('dformat'));
+      clear(misBox);
+      if (!m) return;
+      misBox.appendChild(noteBox('<b>잠깐 — 서로 안 맞는 것 같습니다.</b><br>' +
+        '형태는 「' + m.picked + '」' + JOSA.only(m.picked, 'eul') + ' 골랐는데, 형식 「' +
+        getVal('dformat') + '」' + JOSA.only(getVal('dformat'), 'eun') +
+        ' <b>' + m.guess + '</b> 쪽으로 보입니다. ' + m.why +
+        '<br>둘 다 맞을 수도 있습니다 — 그럴 때는 「동적(API), 응답은 JSON」 처럼 함께 적어 주세요.'));
+    }
+
+    host.appendChild(card('✍ 내가 받은 데이터는 어느 쪽인가', [
+      field('dformat', { short: true,
+        ph: '예: CSV   /   JSON   /   오픈API   /   JPG 이미지',
+        help: '내려받은 <b>파일의 확장자</b>나, 받은 방식을 적습니다.',
+        after: guessBox,
+        onInput: function () { paintGuess(); } }),
+      pickField('dtype', (DATA.types || []).map(function (t) {
+        return { label: t.key, icon: t.icon };
+      }), {
+        help: '위 설명을 보고 <b>사이트가 어떤 방식으로 주었는지</b> 고릅니다. ' +
+              '헷갈리면 아래 칸에 두 가지를 함께 적어도 됩니다.',
+        other: true,
+        otherPh: '예: 동적(API), 응답은 JSON',
+        onPick: function () { paintMis(); }
+      }),
+      misBox
+    ]));
+
+    paintGuess();
+
+    /* ── 연습: 형태 분류 ────────────────────────────── */
+    var g2 = grader('type-sort');
+    var rows2 = (DATA.typeQuiz || []).map(function (q, i) {
+      return [(i + 1), q.q, g2.sel(DATA.typeChoices, q.a, { label: (i + 1) + '번 답' })];
+    });
+    var why2 = h('div');
+
+    host.appendChild(card('🔎 연습 — 여덟 가지를 나누어 보기', [
+      goalBox(['각 줄이 어떤 형태인지 고르세요.',
+               '<b>「무엇으로 주는가」</b> 를 보면 됩니다. 파일이면 그 파일의 형식, 주소를 부르면 동적입니다.']),
+      table(['', '이런 데이터를 받았다면', '어떤 형태?'], rows2, { left: [1] }),
+      g2.controls(),
+      g2.verdict(),
+      why2
+    ]));
+
+    var oc2 = g2.check;
+    g2.check = function (silent) {
+      var r = oc2(silent);
+      if (!silent) {
+        clear(why2);
+        why2.appendChild(h('h3', '풀이'));
+        (DATA.typeQuiz || []).forEach(function (q, i) {
+          why2.appendChild(h('div.why', [
+            h('b', (i + 1) + '. ' + q.a),
+            h('p.small', q.why)
+          ]));
+        });
+      }
+      return r;
+    };
+    g2.restore();
+  }
+});
+
+/* ══════════════════════════════════════════════════════════
+   ⑤ 무엇이 들어 있나 — 설명 · 규모 · 속성 · 빠진 것
+   ══════════════════════════════════════════════════════════ */
+REG({
+  id: 'content', tab: 1, title: '📊 무엇이 들어 있나',
+  render: function (host) {
+    /* ⚠ 「반정형」·「비정형」 이 「정형」 을 글자로 품으므로 직접 맞춰 보면 안 된다.
+       JUDGE.attrPromptOf() 가 긴 열쇠부터 맞춰 골라 준다. */
+    var dtype = getVal('dtype');
+    var guide = JUDGE.attrPromptOf(dtype);
+
+    var scaleBox = h('div');
+    function paintScale() {
+      clear(scaleBox);
+      scaleBox.appendChild(badgeRow(JUDGE.scaleBadges(getVal('scale')),
+        '얼마나·언제·어디를 모두 적었습니다.'));
+    }
+
+    host.appendChild(card('📊 이 데이터에는 무엇이 들어 있나', [
+      goalBox([
+        '데이터를 <b>열어 놓고</b> 적습니다. 상세 페이지의 설명만 베끼지 마세요.',
+        '<b>규모</b>(얼마나·언제·어디)와 <b>속성</b>(무엇이 들어 있나)을 따로 적습니다.',
+        '마지막으로 <b>빠지거나 치우친 것</b>을 찾습니다 — 이 수업에서 가장 중요한 칸입니다.'
+      ]),
+
+      field('describe', {
+        rows: 5,
+        help: '한 줄(한 건)이 무엇을 나타내는지부터 적으면 좋습니다. ' +
+              '「이 표는 한 줄이 정류장 하나다」 처럼요.',
+        ph: '예: 전국 버스정류장을 한 줄에 하나씩 적어 둔 표다. 정류장 이름과 위도·경도가 있어 ' +
+            '지도에 찍을 수 있고, 관할 지자체가 있어 지역별로 나누어 셀 수도 있다. 이용객 수는 없다.'
+      }),
+
+      field('scale', { short: true,
+        ph: '예: 약 4만 행, 2025년 기준, 전국',
+        help: '<b>얼마나 · 언제 · 어디</b> 세 가지를 한 줄에 적습니다.',
+        after: scaleBox,
+        onInput: function () { paintScale(); } }),
+
+      /* ⚠ 속성 표는 **정형 데이터일 때만** 그린다 (2026-09-04 사용자 지시).
+         다른 형태를 고른 학생에게는 이 칸을 묻지 않으므로 진행률 분모에서도 빠진다
+         (core.html 의 activeFieldKeys · Code.gs 의 fieldsFor_). */
+      JUDGE.needsAttrs(dtype)
+        ? attrTable('attrs', {
+            guide: guide,
+            help: guide.ask + '<br><span class="dim">' +
+                  (guide.guessed
+                    ? '아직 ⑥번에서 데이터 형태를 고르지 않아 <b>정형</b> 기준으로 보여 드립니다. '
+                    : '지금 고른 형태: <b>' + guide.type + '</b> ') +
+                  '— 형태를 바꾸면 이 안내와 예시가 함께 바뀝니다.</span>'
+          })
+        : tipBox('<b>' + dtype + '</b>' + JOSA.only(dtype, 'eul') + ' 고르셨으므로 속성 표(⑦-3)는 묻지 않습니다. ' +
+                 '표의 열이 정해져 있는 <b>정형 데이터</b>에만 해당하는 칸이라서입니다. ' +
+                 '대신 위 <b>⑦ 데이터 설명</b>에 무엇이 들어 있는지 글로 적어 주세요.'),
+
+      /* ⚠ 자료형 이야기는 속성 표가 있을 때만 뜻이 있다 — 표를 감추면 이것도 함께 감춘다 */
+      JUDGE.needsAttrs(dtype)
+        ? tipBox('<b>자료형은 왜 적나요?</b> 같은 「3」이라도 <b>정수 3</b>과 <b>글자 "3"</b>은 다릅니다. ' +
+                 '글자로 되어 있으면 더할 수 없고, 크기 비교도 「10 &lt; 9」 처럼 엉뚱하게 됩니다. ' +
+                 '분석하기 전에 반드시 확인해야 하는 것입니다.')
+        : null
+    ]));
+
+    paintScale();
+
+    /* ── 편향 살펴보기 ──────────────────────────────── */
+    host.appendChild(card('🔍 빠지거나 치우친 것은 없나', [
+      goalBox([
+        '아래 다섯 가지를 스스로 물어보고, 하나라도 찾아 적습니다.',
+        '<b>「없다」고 쓰지 마세요.</b> 어떤 데이터에도 빠진 것은 반드시 있습니다.'
+      ]),
+      h('ul.selfq', (DATA.biasSelf || []).map(function (q) { return h('li', rich(q)); })),
+      field('bias', {
+        rows: 4,
+        help: '데이터에 <b>들어 있지 않은 것</b>을 한 가지만 찾아도 좋습니다.',
+        ph: '예: 정류장의 위치만 있고 버스가 얼마나 자주 오는지는 없다. ' +
+            '그래서 「정류장이 가깝다」와 「버스 타기 편하다」는 다른 이야기가 된다.'
+      }),
+      noteBox('성취기준 <b>[12데과02-01]</b> 은 「데이터를 <b>편향되지 않도록</b> 수집하고, ' +
+              '수집된 데이터의 특성을 분석한다」 입니다. ' +
+              '가치·태도 평가 요소도 <b>「데이터가 편향되지 않도록 수집하는 자세」</b> 입니다. ' +
+              '빠진 것을 스스로 찾아 밝히는 것이 그 자세입니다.')
+    ]));
+
+    /* ── 연습: 편향 점검 ────────────────────────────── */
+    var g3 = grader('bias-check');
+    var box3 = h('div');
+    (DATA.biasQuiz || []).forEach(function (q, i) {
+      box3.appendChild(h('div.qitem', [
+        h('p.qq', (i + 1) + '. ' + q.q),
+        g3.pick(q.opts, q.a, { cls: 'col' })
+      ]));
+    });
+    var why3 = h('div');
+
+    host.appendChild(card('🔎 연습 — 이 수집 방법의 문제는?', [
+      goalBox(['다섯 가지 상황에서 <b>무엇이 잘못되었는지</b> 고르세요.',
+               '같은 잘못을 내 데이터에서도 하고 있지 않은지 견주어 보세요.']),
+      box3,
+      g3.controls(),
+      g3.verdict(),
+      why3
+    ]));
+
+    var oc3 = g3.check;
+    g3.check = function (silent) {
+      var r = oc3(silent);
+      if (!silent) {
+        clear(why3);
+        why3.appendChild(h('h3', '풀이 — 편향에는 이름이 있습니다'));
+        (DATA.biasQuiz || []).forEach(function (q, i) {
+          why3.appendChild(h('div.why', [
+            h('b', (i + 1) + '. ' + q.name),
+            h('p.small', q.why)
+          ]));
+        });
+      }
+      return r;
+    };
+    g3.restore();
+  }
+});
+</script>

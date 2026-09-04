@@ -1,0 +1,303 @@
+<!--
+  공공데이터 수집 기록장 — Ⅱ 마무리 (화면 2개)
+  © 2026 티쳐무 · 모든 권리 보유
+
+  🛠 풀 수 있는 문제 / 📄 내 활동지(점검·제출)
+-->
+<script>
+
+/* ══════════════════════════════════════════════════════════
+   ⑥ 해결할 수 있는 문제
+   ══════════════════════════════════════════════════════════ */
+REG({
+  id: 'solve', tab: 2, title: '🛠 풀 수 있는 문제',
+  render: function (host) {
+    var badges = h('div');
+    var frameBox = h('div.framebox');
+    var pickKey = loadAns('problem-kind', null);
+
+    function paintBadges() {
+      clear(badges);
+      badges.appendChild(badgeRow(JUDGE.problemBadges(getVal('problem')),
+        '네 가지를 모두 담았습니다. 아주 좋은 답입니다.'));
+    }
+
+    function paintFrame() {
+      var k = null;
+      (DATA.problemKinds || []).forEach(function (x) { if (x.key === pickKey) k = x; });
+      clear(frameBox);
+      if (!k) {
+        frameBox.appendChild(h('p.small',
+          '네 가지 가운데 하나를 누르면 문장 틀과 보기를 보여 드립니다. 꼭 이대로 쓸 필요는 없습니다.'));
+        return;
+      }
+      frameBox.appendChild(h('b', k.icon + ' ' + k.name));
+      frameBox.appendChild(h('p.frame-t', { html: k.frame }));
+      frameBox.appendChild(h('p.small', '보기 — ' + k.ex));
+    }
+
+    /* 앞 화면에서 쓴 것을 다시 보여 준다 — 이어서 쓰기 쉽도록 */
+    var recall = [];
+    if (JUDGE.len(getVal('interest'))) recall.push(['① 관심 분야', getVal('interest')]);
+    if (JUDGE.len(getVal('data_name'))) recall.push(['② 데이터 이름', getVal('data_name')]);
+    if (JUDGE.len(getVal('attrs'))) recall.push(['⑦-3 들어 있는 값', getVal('attrs')]);
+    if (JUDGE.len(getVal('bias'))) recall.push(['⑦-4 빠지거나 치우친 것', getVal('bias')]);
+
+    var kinds = h('div.cards');
+    (DATA.problemKinds || []).forEach(function (k) {
+      var b = h('button.dcard' + (k.key === pickKey ? '.on' : ''), { type: 'button',
+        onclick: function () {
+          pickKey = k.key;
+          saveAns('problem-kind', pickKey);
+          Array.prototype.forEach.call(kinds.children, function (c) { c.classList.remove('on'); });
+          b.classList.add('on');
+          paintFrame();
+        } });
+      b.appendChild(h('span.dc-i', k.icon));
+      add(b, k.name);
+      kinds.appendChild(b);
+    });
+
+    host.appendChild(card('🛠 이 데이터로 어떤 문제를 풀 수 있을까', [
+      goalBox([
+        '①번에 고른 <b>관심 분야</b>가 여기에서 <b>풀 수 있는 문제</b>로 자랍니다.',
+        '데이터 안의 <b>어떤 값</b>을 보면 답이 나오는지 함께 적습니다.',
+        '<b>이 데이터만으로 알 수 없는 것</b>도 한 문장 적으면 훨씬 좋은 답이 됩니다.'
+      ]),
+
+      recall.length
+        ? table(null, recall, { left: [0, 1], leftHead: true })
+        : noteBox('앞 화면들을 아직 채우지 않았습니다. ①~⑤를 먼저 쓰고 오면 이 칸을 쓰기가 훨씬 쉽습니다.'),
+
+      h('h3', '문제는 네 가지 결로 나옵니다'),
+      kinds,
+      frameBox,
+
+      h('div.hr'),
+
+      field('problem', {
+        rows: 6,
+        help: '한 가지를 <b>끝까지</b> 적는 편이, 여러 가지를 한 줄씩 늘어놓는 것보다 좋습니다.',
+        ph: '예: 우리 학교 반경 400m 안에 정류장이 몇 곳인지 세고, 학생 수가 비슷한 이웃 학교와 ' +
+            '견주어 통학 여건이 실제로 나쁜지 밝힐 수 있다. 다만 배차 간격이 없으므로 ' +
+            '정류장 수만으로는 부족하고 시간표 데이터를 더 모아야 한다.',
+        onInput: function () { paintBadges(); }
+      }),
+      badges,
+
+      h('h3', '내 문제를 스스로 점검해 보기'),
+      h('ul.selfq', (DATA.problemSelf || []).map(function (q) { return h('li', rich(q)); })),
+
+      tipBox('<b>데이터로 답할 수 없는 문제</b>도 있습니다. ' +
+             '「우리 학교 급식은 맛있는가」 는 이 데이터로 답할 수 없습니다. ' +
+             '「몇 명이 얼마나 남겼는가」 로 바꾸면 답할 수 있습니다. ' +
+             '데이터로 답할 수 있게 물음을 바꾸는 것도 데이터 과학의 일입니다.')
+    ]));
+
+    paintFrame();
+    paintBadges();
+  }
+});
+
+/* ══════════════════════════════════════════════════════════
+   📄 내 활동지 — 점검하고 제출한다
+   ══════════════════════════════════════════════════════════ */
+REG({
+  id: 'report', tab: 2, title: '📄 내 활동지',
+  render: function (host) {
+
+    var fields = activeFieldKeys().map(fieldOf);
+    var acts = courseActKeys().map(actOf);
+    var list = JUDGE.checklist(STORE.vals, {
+      fields: fields, acts: acts, scores: STORE.scores,
+      attrRows: loadAns('attr-rows', []),
+      screenFields: DATA.screenFields
+    });
+    var left = JUDGE.mustLeft(list);
+    var f = fieldStat(), t = totalScore();
+
+    /* ── 1. 지금까지 ────────────────────────────────── */
+    host.appendChild(card('📄 내 활동지', [
+      h('div.grid3', [
+        h('div.mini-card', [h('h4', '진행률'), h('div.big', progressPct() + '%'),
+          bar(progressPct(), progressPct() >= 100)]),
+        h('div.mini-card', [h('h4', '채운 칸'), h('div.big', f.filled + ' / ' + f.n),
+          h('p.small', '기준 글자 수를 넘긴 칸 ' + f.enough + '개 · 모두 ' + f.chars + '자')]),
+        h('div.mini-card', [h('h4', '연습 활동'), h('div.big', t.got + ' / ' + t.max),
+          h('p.small', acts.length + '가지 가운데 ' + t.tried + '가지를 해 보았습니다')])
+      ]),
+      APP.state.submitted
+        ? tipBox('이미 <b>' + APP.state.submitted + '</b> 에 제출했습니다. ' +
+                 '고쳐서 다시 제출해도 됩니다 — 마지막 것이 남습니다.')
+        : null
+    ]));
+
+    /* ── 2. 점검 목록 ───────────────────────────────── */
+    var checkBox = h('div.checks');
+    list.forEach(function (c) {
+      var row = h('div.chk' + (c.ok ? '.ok' : (c.must ? '.must' : '.warn')));
+      row.appendChild(h('span.chk-i', c.ok ? '✓' : (c.must ? '✗' : '△')));
+      var body = h('div.chk-b', [
+        h('b', c.text),
+        h('p.small', rich(c.hint))
+      ]);
+      row.appendChild(body);
+      if (!c.ok && c.screen) {
+        row.appendChild(h('span.chk-go', goBtn(c.screen, '고치러 가기')));
+      }
+      checkBox.appendChild(row);
+    });
+
+    host.appendChild(card('✅ 내기 전에 점검하기', [
+      left
+        ? badBox('<b>반드시 고쳐야 할 것이 ' + left + '가지</b> 남았습니다 (✗ 표시). ' +
+                 '그대로 내도 되지만, 고치고 내면 훨씬 좋은 기록이 됩니다.')
+        : tipBox('<b>반드시 고쳐야 할 것은 없습니다.</b> △ 표시는 「고치면 더 좋다」는 뜻입니다.'),
+      checkBox,
+      h('p.small.dim', { html: '※ 이 점검은 규칙으로 훑어본 것이라 사람처럼 읽지 못합니다. ' +
+        '점수가 아니라 <b>스스로 살펴보라고</b> 만든 것입니다.' })
+    ]));
+
+    /* ── 3. 활동지 전체 ─────────────────────────────── */
+    var rows = fields.map(function (fd) {
+      var v = getVal(fd.key);
+      return [fd.no + ' ' + fd.title, v ? v : '(비어 있음)'];
+    });
+
+    host.appendChild(card('📋 내가 쓴 것 모아 보기', [
+      table(null, rows, { left: [0, 1], leftHead: true }),
+      h('div.row', [
+        h('button.btn.ghost', { type: 'button', onclick: function () { copyReport(fields); } },
+          '📋 글자로 복사하기'),
+        h('button.btn.ghost', { type: 'button', onclick: function () { showClassStat(); } },
+          '👥 우리 반이 모은 데이터 보기')
+      ]),
+      h('p.small.dim', '복사한 글은 문서 편집기에 붙여 넣어 인쇄할 수 있습니다. ' +
+        '선생님께는 [제출하기] 로 보내면 되고, 복사는 내가 가지고 있으려고 하는 것입니다.')
+    ]));
+
+    /* ── 4. 제출 ────────────────────────────────────── */
+    var subMsg = h('div');
+    var subBtn = h('button.btn.lg', { type: 'button', onclick: function () {
+      ask('제출하기',
+        left
+          ? '아직 <b>반드시 고쳐야 할 것이 ' + left + '가지</b> 남았습니다.<br>그래도 제출할까요? ' +
+            '(제출한 뒤에도 고쳐서 다시 낼 수 있습니다)'
+          : '지금까지 쓴 내용을 선생님께 보냅니다.<br>제출한 뒤에도 고쳐서 다시 낼 수 있습니다.',
+        function () {
+          subBtn.disabled = true;
+          subBtn.textContent = '보내는 중…';
+          APP.save(true, function () {
+            APP.submit(function (r) {
+              subBtn.disabled = false;
+              subBtn.textContent = '제출하기';
+              clear(subMsg);
+              if (r && r.ok) {
+                subMsg.appendChild(tipBox('<b>' + r.at + '</b> 에 제출했습니다. 수고했습니다!'));
+                APP.state.submitted = r.at;
+                paintNav();
+              } else {
+                subMsg.appendChild(badBox('제출하지 못했습니다 — ' +
+                  ((r && r.msg) || '잠시 뒤에 다시 눌러 주세요.')));
+              }
+            });
+          });
+        }, '제출하기');
+    } }, '제출하기');
+
+    host.appendChild(card('📤 제출하기', [
+      h('p', { html: '쓴 내용은 <b>자동으로 저장</b>되고 있습니다. 제출을 누르면 ' +
+        '선생님 시트에 「제출한 시각」이 찍힙니다.' }),
+      h('div.row', [subBtn]),
+      subMsg,
+      h('p.small.dim', { html: '컴퓨터실에서는 다 끝난 뒤 오른쪽 위 <b>[나가기]</b> 를 꼭 눌러 주세요. ' +
+        '이 컴퓨터에 남은 기록이 지워집니다.' })
+    ]));
+
+    /* ── 5. 완성 예시 ───────────────────────────────── */
+    var samples = h('div');
+    (DATA.samples || []).forEach(function (s) {
+      samples.appendChild(moreBox(s.title, [
+        table(null, s.rows, { left: [0, 1], leftHead: true })
+      ]));
+    });
+
+    host.appendChild(card('💡 이만큼 쓰면 됩니다 — 완성 예시', [
+      noteBox('아래 예시는 <b>쓰는 방법을 보이려고 지어낸 것</b>입니다. ' +
+              '기관 이름과 이용 조건은 여러분이 연 데이터 상세 페이지에서 <b>직접 확인</b>해야 합니다. ' +
+              '그래서 링크도 실제 상세 페이지가 아니라 포털 첫 화면 주소를 적어 두었습니다.'),
+      samples
+    ]));
+  }
+});
+
+/* ── 활동지를 글자로 만들어 복사한다 ───────────────────── */
+function reportText(fields) {
+  var lines = ['공공데이터 수집 기록장', ''];
+  fields.forEach(function (fd) {
+    lines.push('[' + fd.no + '] ' + fd.title);
+    lines.push(getVal(fd.key) || '(비어 있음)');
+    lines.push('');
+  });
+  var t = totalScore();
+  lines.push('— 연습 활동 ' + t.got + ' / ' + t.max + '점 · 진행률 ' + progressPct() + '%');
+  return lines.join('\n');
+}
+
+function copyReport(fields) {
+  var text = reportText(fields);
+  var ta = h('textarea.copybox', { rows: 12, 'aria-label': '복사할 글' });
+  ta.value = text;
+
+  modal({
+    title: '📋 글자로 복사하기',
+    text: '아래 글을 복사해 문서 편집기에 붙여 넣으세요.',
+    node: ta,
+    ok: '복사하기', cancel: '닫기',
+    onOk: function () {
+      var done = false;
+      try {
+        ta.focus(); ta.select();
+        done = document.execCommand && document.execCommand('copy');
+      } catch (e) { done = false; }
+      if (!done && navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(function () { toast('복사했습니다.'); },
+          function () { toast('복사가 막혔습니다. 글을 직접 긁어서 복사해 주세요.'); });
+        return;
+      }
+      toast(done ? '복사했습니다.' : '복사가 막혔습니다. 글을 직접 긁어서 복사해 주세요.');
+    }
+  });
+  setTimeout(function () { try { ta.focus(); ta.select(); } catch (e) {} }, 80);
+}
+
+/* ── 우리 반이 모은 데이터 (이름 없이 개수만) ────────────── */
+function showClassStat() {
+  var box = h('div');
+  box.appendChild(h('p.small', '불러오는 중…'));
+  modal({ title: '👥 우리 반이 모은 데이터', node: box, cancel: null, ok: '닫기' });
+
+  callServer('apiClassStat', [APP.state.token], function (r) {
+    clear(box);
+    if (!r || !r.ok) {
+      box.appendChild(h('p', (r && r.msg) || '불러오지 못했습니다.'));
+      return;
+    }
+    if (!r.enough) {
+      box.appendChild(h('p', { html:
+        '아직 <b>' + r.n + '명</b>이 적었습니다. ' +
+        '<b>' + r.min + '명</b> 이상이 적어야 열립니다.' }));
+      box.appendChild(h('p.small',
+        '사람이 적으면 누가 무엇을 골랐는지 드러나기 때문입니다. 이름은 담지 않고 개수만 셉니다.'));
+      return;
+    }
+    box.appendChild(h('h3', '관심 분야'));
+    box.appendChild(distBars(r.interest));
+    box.appendChild(h('h3', '데이터 형태'));
+    box.appendChild(distBars(r.dtype));
+    box.appendChild(h('p.small.dim',
+      '이름은 담지 않고 개수만 셉니다. ' +
+      '한쪽으로 몰려 있다면 「우리 반이 보는 세상도 치우쳐 있는 것은 아닐까?」 이야기해 보세요.'));
+  });
+}
+</script>
