@@ -294,7 +294,8 @@ ALL.forEach((f) => {
 });
 ['LICENSE', 'README.md', 'CLAUDE.md', 'package.json'].forEach((f) => {
   const p = path.join(SRC, '..', f);
-  if (!fs.existsSync(p)) { fail(f + ' 파일이 없습니다'); return; }
+  // CLAUDE.md 는 깃허브에 올리지 않으므로 받은 저장소에는 없을 수 있다
+  if (!fs.existsSync(p)) { if (f !== 'CLAUDE.md') fail(f + ' 파일이 없습니다'); return; }
   const raw = fs.readFileSync(p, 'utf8');
   if (f === 'package.json') {
     if (JSON.parse(raw).license === 'UNLICENSED') pass('package.json 의 license 가 UNLICENSED');
