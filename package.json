@@ -10,6 +10,7 @@
     "check": "node tools/check.js",
     "preview": "node tools/preview.js",
     "pack": "node tools/pack.js",
-    "build": "npm run check && npm test && npm run preview && npm run pack"
+    "build": "npm run check && npm test && npm run preview && npm run pack",
+    "site": "node tools/site.mjs"
   }
 }
