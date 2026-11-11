@@ -35,10 +35,10 @@ describe('시트 준비', () => {
     const { api, gas } = freshServer();
     deepEq(gas.sheets['제출 현황'].dump()[0], api.statusHeader_());
   });
-  test('머리글은 메타 16 + 서술 13 + 활동 3 = 32열', () => {
+  test('머리글은 메타 16 + 서술 13 + 활동 0 = 29열', () => {
     const { api } = freshServer();
     eq(api.META_COLS.length, 16);
-    eq(api.statusHeader_().length, 32);
+    eq(api.statusHeader_().length, 29);
   });
   test('계정 시트는 숨긴다 (비밀번호 해시가 보이지 않게)', () => {
     const { gas } = freshServer();
@@ -161,10 +161,10 @@ describe('로그인', () => {
 
 describe('정리하기(tally_)', () => {
   const { api } = freshServer();
-  test('진행률 = (채운 칸 + 손댄 활동) ÷ 16', () => {
+  test('진행률 = (채운 칸 + 손댄 활동) ÷ 13', () => {
     const t = api.tally_(fullPayload(api));
     eq(t.filled, 13);
-    eq(t.tried, 3);
+    eq(t.tried, 0);
     eq(t.progress, 100);
   });
   test('★ 비정형을 고르면 속성 칸을 빼고 세어 100% 가 된다', () => {
@@ -191,15 +191,6 @@ describe('정리하기(tally_)', () => {
     const t = api.tally_({ vals: {}, scores: {} });
     eq(t.progress, 0);
     eq(t.chars, 0);
-  });
-  test('만점은 서버를 믿는다 (화면이 부풀려 보내도 잘린다)', () => {
-    const t = api.tally_({ vals: {}, scores: { 'type-sort': { g: 999, a: true } } });
-    eq(t.per['type-sort'], 8);
-    eq(t.got, 8);
-  });
-  test('음수 점수는 0으로', () => {
-    const t = api.tally_({ vals: {}, scores: { 'type-sort': { g: -5, a: true } } });
-    eq(t.per['type-sort'], 0);
   });
   test('시트에 따로 적을 값(관심 분야·데이터 이름·형태·링크)을 꺼낸다', () => {
     const t = api.tally_(fullPayload(api, {
@@ -291,9 +282,9 @@ describe('저장과 제출', () => {
   test('활동 풀이 상태도 함께 이어진다', () => {
     const { api } = freshServer();
     const tk = withStudent(api, '20101', '홍길동', 'pw1234');
-    api.apiSave(tk, { v: 1, vals: {}, scores: {}, answers: { 'site-match': ['학교알리미'] } });
+    api.apiSave(tk, { v: 1, vals: {}, scores: {}, answers: { 'attr-rows': [{ name: '학생수' }] } });
     const again = api.apiLogin('20101', 'pw1234');
-    deepEq(again.data.answers['site-match'], ['학교알리미']);
+    deepEq(again.data.answers['attr-rows'], [{ name: '학생수' }]);
   });
   test('마감하면 제출이 막히지만 저장은 계속된다', () => {
     const { api, gas } = freshServer();
@@ -362,27 +353,18 @@ describe('교사 메뉴가 만드는 글', () => {
     ok(t.indexOf('학생 1명') >= 0, t);
     ok(t.indexOf('제출 1명') >= 0);
     ok(t.indexOf('평균 진행률 100%') >= 0);
-    ok(t.indexOf('활동별 평균') >= 0);
+    ok(t.indexOf('활동별 평균') < 0, '활동이 없으면 활동별 평균 줄을 내지 않는다');
     ok(t.indexOf('보는 범위') >= 0, '차시 범위를 밝혀야 합니다');
   });
-  test('반 평균이 절반에 못 미치는 활동에 ⚠ 를 붙인다', () => {
-    const { api } = freshServer();
-    const tk = withStudent(api, '20101', '홍길동');
-    const p = fullPayload(api);
-    p.scores['bias-check'] = { g: 1, a: true };      /* 5점 만점에 1점 */
-    api.apiSubmit(tk, p);
-    const t = api.summaryText_();
-    ok(/⚠ 편향 점검/.test(t), t);
-  });
-  test('학생 답 자세히 보기에 서술 원문과 활동 점수가 나온다', () => {
+  test('학생 답 자세히 보기에 서술 원문이 나온다', () => {
     const { api } = freshServer();
     const tk = withStudent(api, '20101', '홍길동');
     api.apiSave(tk, fullPayload(api, { data_name: '전국 버스정류장 위치정보' }));
     const t = api.detailText_('20101', '홍길동', '', null);
     ok(t.indexOf('전국 버스정류장 위치정보') >= 0);
-    ok(t.indexOf('활동 점수') >= 0);
+    ok(t.indexOf('활동 점수') < 0, '활동이 없으면 활동 점수 줄을 내지 않는다');
     ok(t.indexOf('Ⅰ 기록하기') >= 0);
-    ok(t.indexOf('Ⅱ 마무리') >= 0);
+    ok(t.indexOf('[⑧] 해결할 수 있는 문제') >= 0, '⑧ 칸은 Ⅰ 기록하기 탭 아래에 나온다');
   });
   test('기준에 못 미친 칸에 △ 를 붙인다', () => {
     const { api } = freshServer();
@@ -444,7 +426,7 @@ describe('공개 주소 ?api=stat', () => {
     const st = api.publicStat_();
     ok(st.ok);
     eq(st.students, 1);
-    eq(st.totalMax, 18);
+    eq(st.totalMax, 0);
     ok(JSON.stringify(st).indexOf('홍길동') < 0);
   });
 });
@@ -454,10 +436,10 @@ describe('화면에 넘겨 주는 기준표(clientBoot_)', () => {
     const { api } = freshServer();
     const b = api.clientBoot_();
     eq(b.fields.length, 13);
-    eq(b.activities.length, 3);
+    eq(b.activities.length, 0);
     eq(b.tabs.length, 2);
-    eq(b.totalMax, 18);
-    eq(b.steps, 16);
+    eq(b.totalMax, 0);
+    eq(b.steps, 13);
     eq(b.closed, false);
     deepEq(b.course.screens, api.COURSE.screens);
   });

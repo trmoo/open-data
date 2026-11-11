@@ -112,9 +112,6 @@ describe('데이터 형태 네 가지', () => {
       ok(t.formats && t.what && t.how && t.why, t.key + ' 에 빈 항목이 있습니다');
     });
   });
-  test('고르기 보기가 형태 이름과 같다', () => {
-    deepEq(DATA.typeChoices, DATA.types.map((t) => t.key));
-  });
   test('겹칠 수 있다는 것을 밝혀 두었다', () => {
     ok(DATA.typeOverlap.indexOf('JSON') >= 0);
     ok(DATA.typeOverlap.indexOf('반정형') >= 0);
@@ -132,72 +129,6 @@ describe('데이터 형태 네 가지', () => {
       const ph = DATA.attrPrompt[k].ph;
       ok(ph.name.indexOf('학생수') < 0 && ph.ex.indexOf('241') < 0,
          k + ' 에 정형용 예시가 들어 있습니다');
-    });
-  });
-});
-
-describe('활동 ① 어디서 찾을까', () => {
-  test('5문항', () => { eq(DATA.siteQuiz.length, 5); });
-  test('정답이 모두 보기 안에 있다', () => {
-    DATA.siteQuiz.forEach((q, i) => {
-      ok(DATA.siteChoices.indexOf(q.a) >= 0, (i + 1) + '번 정답이 보기에 없습니다: ' + q.a);
-    });
-  });
-  test('정답이 모두 다른 사이트다 (같은 답이 되풀이되지 않게)', () => {
-    eq(new Set(DATA.siteQuiz.map((q) => q.a)).size, 5);
-  });
-  test('풀이가 모두 있다', () => {
-    DATA.siteQuiz.forEach((q, i) => ok(q.why && q.why.length > 15, (i + 1) + '번 풀이가 짧습니다'));
-  });
-  test('정답인 사이트가 도감에 실재한다', () => {
-    const names = DATA.sites.map((s) => s.name);
-    DATA.siteQuiz.forEach((q) => {
-      ok(names.indexOf(q.a) >= 0, '도감에 없는 사이트가 정답입니다: ' + q.a);
-    });
-  });
-});
-
-describe('활동 ② 데이터 형태 분류', () => {
-  test('8문항', () => { eq(DATA.typeQuiz.length, 8); });
-  test('네 형태가 두 문항씩 고르게 나온다', () => {
-    const c = {};
-    DATA.typeQuiz.forEach((q) => { c[q.a] = (c[q.a] || 0) + 1; });
-    DATA.types.forEach((t) => eq(c[t.key], 2, t.key + ' 문항 수'));
-  });
-  test('정답이 모두 보기 안에 있다', () => {
-    DATA.typeQuiz.forEach((q, i) => {
-      ok(DATA.typeChoices.indexOf(q.a) >= 0, (i + 1) + '번 정답이 보기에 없습니다');
-    });
-  });
-  test('풀이가 모두 있다', () => {
-    DATA.typeQuiz.forEach((q, i) => ok(q.why && q.why.length > 10, (i + 1) + '번 풀이가 없습니다'));
-  });
-});
-
-describe('활동 ③ 편향 점검', () => {
-  test('5문항 · 보기는 각 4개', () => {
-    eq(DATA.biasQuiz.length, 5);
-    DATA.biasQuiz.forEach((q, i) => eq(q.opts.length, 4, (i + 1) + '번 보기 수'));
-  });
-  test('정답이 보기 안에 있다', () => {
-    DATA.biasQuiz.forEach((q, i) => {
-      ok(q.opts.indexOf(q.a) >= 0, (i + 1) + '번 정답이 보기에 없습니다');
-    });
-  });
-  test('정답 자리가 한곳에 몰려 있지 않다', () => {
-    const at = DATA.biasQuiz.map((q) => q.opts.indexOf(q.a));
-    ok(new Set(at).size >= 3, '정답 자리가 ' + JSON.stringify(at) + ' 로 치우쳐 있습니다');
-  });
-  test('편향마다 이름과 풀이가 붙어 있다', () => {
-    DATA.biasQuiz.forEach((q, i) => {
-      ok(q.name && q.name.length >= 2, (i + 1) + '번 편향 이름이 없습니다');
-      ok(q.why && q.why.length > 30, (i + 1) + '번 풀이가 짧습니다');
-    });
-    eq(new Set(DATA.biasQuiz.map((q) => q.name)).size, 5, '편향 이름이 겹칩니다');
-  });
-  test('보기의 글이 겹치지 않는다', () => {
-    DATA.biasQuiz.forEach((q, i) => {
-      eq(new Set(q.opts).size, 4, (i + 1) + '번 보기가 겹칩니다');
     });
   });
 });

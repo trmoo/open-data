@@ -148,6 +148,11 @@ details.more[open] > summary{margin-bottom:8px}
 .dcard.on{border-color:var(--brand); background:#e9f2fb; color:var(--brand)}
 .dcard.ok{border-color:#3f9a70; background:var(--okbg)}
 .dcard.no{border-color:var(--bad); background:var(--badbg)}
+/* 함께 고를 수 있는 카드 (예: 데이터 형태의 「동적」) — 모양 카드와 구별되게 점선으로 둔다 */
+.dcard-also{border-style:dashed}
+.dcard-also::before{content:'＋ '; color:var(--sub); font-weight:700}
+.dcard-also.on{border-style:solid; border-color:var(--accent); background:#fdf2e6; color:var(--accent)}
+.dcard-also.on::before{content:'✓ '; color:var(--accent)}
 .dc-i{font-size:19px}
 .dc-s{font-size:13px; color:var(--sub); font-weight:500; margin-left:4px}
 

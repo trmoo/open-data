@@ -36,17 +36,17 @@ var FIELDS = [
   { key: 'source_url', no: '④',   tab: 1, title: '출처 링크',                min: 10, w: 320 },
   { key: 'license',    no: '④-2', tab: 1, title: '이용 조건',                min: 2,  w: 200 },
 
-  { key: 'why',        no: '⑤',   tab: 1, title: '수집한 이유',              min: 60, w: 340 },
+  { key: 'why',        no: '⑤',   tab: 1, title: '수집한 이유',              min: 20, w: 340 },
 
   { key: 'dtype',      no: '⑥',   tab: 1, title: '제공 데이터 형태',         min: 2,  w: 120 },
   { key: 'dformat',    no: '⑥-2', tab: 1, title: '파일 형식',                min: 2,  w: 120 },
 
-  { key: 'describe',   no: '⑦',   tab: 1, title: '데이터 설명',              min: 60, w: 340 },
+  { key: 'describe',   no: '⑦',   tab: 1, title: '데이터 설명',              min: 20, w: 340 },
   { key: 'scale',      no: '⑦-2', tab: 1, title: '데이터의 규모',            min: 5,  w: 220 },
   { key: 'attrs',      no: '⑦-3', tab: 1, title: '무엇이 들어 있나(속성)',    min: 10, w: 380 },
   { key: 'bias',       no: '⑦-4', tab: 1, title: '빠지거나 치우친 것',        min: 30, w: 300 },
 
-  { key: 'problem',    no: '⑧',   tab: 2, title: '해결할 수 있는 문제',       min: 80, w: 400 }
+  { key: 'problem',    no: '⑧',   tab: 1, title: '해결할 수 있는 문제',       min: 40, w: 400 }
 ];
 
 /**
@@ -54,11 +54,8 @@ var FIELDS = [
  * ⚠ 화면이 보낸 점수는 만점으로 자르기만 한다. 판정 엔진은 화면(judge.html)에 있고,
  *   교사는 서술 원문을 읽고 최종 채점한다 — 이 점수는 학습 과정을 보는 자료다.
  */
-var ACTIVITIES = [
-  { key: 'site-match', tab: 1, max: 5, label: '어디서 찾을까' },
-  { key: 'type-sort',  tab: 1, max: 8, label: '데이터 형태 분류' },
-  { key: 'bias-check', tab: 1, max: 5, label: '편향 점검' }
-];
+/* 2026-09-17 사용자 지시로 연습 활동을 모두 뺐다. 틀은 남겨 두어 나중에 다시 넣을 수 있다. */
+var ACTIVITIES = [];
 
 /**
  * ★ 이번 차시에 열어 줄 화면 (차시 범위).
@@ -72,7 +69,7 @@ var COURSE = {
   screens: ['interest', 'source', 'reason', 'type', 'content', 'solve', 'report'],
   fields: ['interest', 'data_name', 'provider', 'source_url', 'license',
            'why', 'dtype', 'dformat', 'describe', 'scale', 'attrs', 'bias', 'problem'],
-  acts: ['site-match', 'type-sort', 'bias-check']
+  acts: []
 };
 
 /** 차시 범위에 든 서술 칸 (범위가 없으면 전부) */
@@ -123,7 +120,12 @@ function totalMax_() {
 function isStructured_(dtype) {
   var t = String(dtype == null ? '' : dtype);
   if (!t.replace(/\s/g, '')) return true;
-  if (t.indexOf('반정형') >= 0 || t.indexOf('비정형') >= 0 || t.indexOf('동적') >= 0) return false;
+  if (t.indexOf('반정형') >= 0 || t.indexOf('비정형') >= 0) return false;
+  /* ★ 「동적」 은 받는 방식이라 모양과 함께 고를 수 있다 (2026-09-20).
+     「정형 · 동적」 은 정형으로 보고, 「동적」 만이면 모양을 모르니 아니라고 본다.
+     ⚠ 화면 쪽 JUDGE.needsAttrs() 와 순서까지 같아야 한다. 시험이 둘을 맞대어 본다. */
+  if (t.indexOf('정형') >= 0) return true;
+  if (t.indexOf('동적') >= 0) return false;
   return true;
 }
 
@@ -232,7 +234,7 @@ function setupSheets() {
 
   var msg = '시트 ' + made + '장을 확인했습니다.\n\n' +
     '· ' + SH_STATUS + ' (채점용, ' + statusHeader_().length + '열 — 서술 ' +
-      FIELDS.length + '칸 + 활동 ' + ACTIVITIES.length + '가지)\n' +
+      FIELDS.length + '칸' + (ACTIVITIES.length ? ' + 활동 ' + ACTIVITIES.length + '가지' : '') + ')\n' +
     '· ' + SH_DRAFT + '\n' +
     '· ' + SH_LOG + '\n' +
     '· ' + SH_ACC + ' (숨김 — 비밀번호는 해시로만 저장되어 교사도 볼 수 없습니다)\n\n' +
@@ -692,8 +694,9 @@ function menuAbout() {
   var ui = SpreadsheetApp.getUi();
   ui.alert('공공데이터 수집 기록장',
     '「데이터 과학」 [12데과02-01] 수업용 웹앱입니다.\n' +
-    '서술 ' + FIELDS.length + '칸 · 채점 활동 ' + ACTIVITIES.length + '가지(만점 ' + totalMax_() + '점).\n\n' +
-    '· 진행률(%) = (채운 서술 칸 + 손댄 활동) ÷ ' + stepCount_() + '\n' +
+    '서술 ' + FIELDS.length + '칸' +
+      (ACTIVITIES.length ? ' · 채점 활동 ' + ACTIVITIES.length + '가지(만점 ' + totalMax_() + '점)' : '') + '.\n\n' +
+    '· 진행률(%) = (채운 서술 칸' + (ACTIVITIES.length ? ' + 손댄 활동' : '') + ') ÷ ' + stepCount_() + '\n' +
     '  ⑦-3 속성 표는 정형 데이터일 때만 묻습니다 — 다른 형태를 고른 학생은 분모가 하나 적습니다.\n' +
     '· 제출 시각이 비어 있으면 아직 작성 중입니다.\n' +
     '· 링크 점검·구체성 점검은 화면의 규칙 판정 결과입니다. 사람처럼 읽지 못하므로\n' +
@@ -756,10 +759,10 @@ function summaryText_() {
   if (edited) lines.push('제출한 뒤에 고친 학생 ' + edited + '명 (제출 시점 원문은 「' + SH_LOG + '」 에 있습니다)');
   if (COURSE && COURSE.screens && COURSE.screens.length) {
     lines.push('보는 범위 — 「' + COURSE.name + '」 (서술 ' + sFields.length +
-               '칸 · 활동 ' + sActs.length + '가지). 잠긴 화면은 세지 않습니다.');
+               '칸' + (sActs.length ? ' · 활동 ' + sActs.length + '가지' : '') + '). 잠긴 화면은 세지 않습니다.');
   }
 
-  lines.push('', '── 활동별 평균 (⚠ 는 반 평균이 절반에 못 미친 곳) ──');
+  if (sActs.length) lines.push('', '── 활동별 평균 (⚠ 는 반 평균이 절반에 못 미친 곳) ──');
   var rank = [];
   for (i = 0; i < sActs.length; i++) {
     rank.push({ label: sActs[i].label, max: sActs[i].max,
@@ -812,8 +815,8 @@ function menuDetail() {
 function detailText_(sid, name, edited, data) {
   data = data || loadDraft_(sid);
   var t = tally_(data);
-  var lines = [sid + ' ' + name + ' — 진행률 ' + t.progress + '% · ' + t.chars + '자 · ' +
-               '활동 ' + t.got + '/' + t.max + '점'];
+  var lines = [sid + ' ' + name + ' — 진행률 ' + t.progress + '% · ' + t.chars + '자' +
+               (t.max ? ' · 활동 ' + t.got + '/' + t.max + '점' : '')];
   if (edited) {
     lines.push('⚠ 제출한 뒤에 고쳤습니다 — 제출 시점 원문은 「' + SH_LOG + '」 시트에 있습니다.');
   }
@@ -836,7 +839,7 @@ function detailText_(sid, name, edited, data) {
   }
   for (i = 0; i < sFields.length; i++) putField(sFields[i]);
 
-  lines.push('', '── 활동 점수 ──');
+  if (sActs.length) lines.push('', '── 활동 점수 ──');
   for (i = 0; i < sActs.length; i++) {
     var a = sActs[i];
     lines.push('  ' + (t.per[a.key] === a.max ? '○' : (t.per[a.key] > 0 ? '△' : '·')) +

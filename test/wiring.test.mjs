@@ -22,10 +22,10 @@ const fieldKeys = new Set(fieldCalls.map((c) => c.key));
 const graderKeys = new Set(graderCalls.map((c) => c.key));
 
 describe('화면 등록', () => {
-  test('화면 일곱 개 — 탭 Ⅰ 다섯 · 탭 Ⅱ 둘', () => {
+  test('화면 일곱 개 — 탭 Ⅰ 여섯 · 탭 Ⅱ 하나', () => {
     eq(regs.length, 7);
-    eq(regs.filter((r) => r.tab === 1).length, 5);
-    eq(regs.filter((r) => r.tab === 2).length, 2);
+    eq(regs.filter((r) => r.tab === 1).length, 6);
+    eq(regs.filter((r) => r.tab === 2).length, 1);
   });
   test('아이디가 겹치지 않는다', () => {
     eq(new Set(regs.map((r) => r.id)).size, regs.length);
@@ -43,17 +43,17 @@ describe('화면 등록', () => {
 });
 
 describe('기준표', () => {
-  test('서술 칸 13개 · 활동 3가지(만점 18점)', () => {
+  test('서술 칸 13개 · 활동 없음(만점 0점)', () => {
     eq(api.FIELDS.length, 13);
-    eq(api.ACTIVITIES.length, 3);
-    eq(api.totalMax_(), 18);
+    eq(api.ACTIVITIES.length, 0);
+    eq(api.totalMax_(), 0);
   });
-  test('진행률의 분모는 13 + 3 = 16', () => {
-    eq(api.stepCount_(), 16);
+  test('진행률의 분모는 서술 칸 13', () => {
+    eq(api.stepCount_(), 13);
   });
   test('열쇠가 겹치지 않는다', () => {
     eq(new Set(api.FIELDS.map((f) => f.key)).size, 13);
-    eq(new Set(api.ACTIVITIES.map((a) => a.key)).size, 3);
+    eq(new Set(api.ACTIVITIES.map((a) => a.key)).size, 0);
   });
   test('학습지 여덟 항목(①~⑧)이 모두 있다', () => {
     ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'].forEach((no) => {
@@ -129,14 +129,8 @@ describe('활동의 문항 수와 만점', () => {
   const max = {};
   api.ACTIVITIES.forEach((a) => { max[a.key] = a.max; });
 
-  test('어디서 찾을까 — 문항 5 = 만점 5', () => {
-    eq(DATA.siteQuiz.length, max['site-match']);
-  });
-  test('데이터 형태 분류 — 문항 8 = 만점 8', () => {
-    eq(DATA.typeQuiz.length, max['type-sort']);
-  });
-  test('편향 점검 — 문항 5 = 만점 5', () => {
-    eq(DATA.biasQuiz.length, max['bias-check']);
+  test('연습 활동이 없다 (2026-09-17 사용자 지시로 모두 뺐다)', () => {
+    eq(Object.keys(max).length, 0);
   });
 });
 

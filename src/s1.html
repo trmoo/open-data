@@ -1,8 +1,8 @@
 <!--
-  공공데이터 수집 기록장 — Ⅰ 기록하기 (화면 5개)
+  공공데이터 수집 기록장 — Ⅰ 기록하기 (화면 6개)
   © 2026 티쳐무 · 모든 권리 보유
 
-  🎯 관심 분야 / 🔗 데이터와 출처 / 💡 수집한 이유 / 🧩 데이터 형태 / 📊 무엇이 들어 있나
+  🎯 관심 분야 / 🔗 데이터와 출처 / 💡 수집한 이유 / 🧩 데이터 형태 / 📊 무엇이 들어 있나 / 🛠 풀 수 있는 문제
 -->
 <script>
 
@@ -95,40 +95,6 @@ REG({
         '<b>이용 조건을 반드시 확인</b>해야 하고, 어떤 사람들의 기록인지도 살펴야 합니다.' }),
       h('div.grid2', pri.map(siteCard))
     ]));
-
-    /* ── 3. 연습: 어디서 찾을까 ──────────────────────── */
-    var g = grader('site-match');
-    var rows = (DATA.siteQuiz || []).map(function (q, i) {
-      return [(i + 1), q.q, g.sel(DATA.siteChoices, q.a, { label: (i + 1) + '번 답' })];
-    });
-    var whyBox = h('div');
-
-    host.appendChild(card('🔎 연습 — 이 데이터는 어디서 찾을까?', [
-      goalBox(['다섯 가지를 어디서 찾을 수 있을지 골라 보세요.',
-               '헷갈리면 위 도감의 <b>「이럴 때 좋다」</b> 를 다시 읽어 보세요.']),
-      table(['', '찾고 싶은 것', '어디서?'], rows, { left: [1] }),
-      g.controls(),
-      g.verdict(),
-      whyBox
-    ]));
-
-    /* 확인을 누르면 풀이를 펼친다 */
-    var origCheck = g.check;
-    g.check = function (silent) {
-      var r = origCheck(silent);
-      if (!silent) {
-        clear(whyBox);
-        whyBox.appendChild(h('h3', '풀이'));
-        (DATA.siteQuiz || []).forEach(function (q, i) {
-          whyBox.appendChild(h('div.why', [
-            h('b', (i + 1) + '. ' + q.a),
-            h('p.small', q.why)
-          ]));
-        });
-      }
-      return r;
-    };
-    g.restore();
   }
 });
 
@@ -337,7 +303,7 @@ REG({
       goalBox([
         '네 가지를 하나씩 눌러 <b>실제로 어떻게 생겼는지</b> 보세요.',
         '내가 받은 데이터의 <b>파일 형식</b>을 적으면 형태를 짐작해 드립니다.',
-        '마지막에 여덟 가지를 나누어 보는 연습이 있습니다.'
+        '<b>「동적」 은 받는 방식</b>이라 모양(정형·비정형·반정형)과 <b>함께</b> 고를 수 있습니다.'
       ]),
       tabsRow,
       detail,
@@ -369,7 +335,7 @@ REG({
         '형태는 「' + m.picked + '」' + JOSA.only(m.picked, 'eul') + ' 골랐는데, 형식 「' +
         getVal('dformat') + '」' + JOSA.only(getVal('dformat'), 'eun') +
         ' <b>' + m.guess + '</b> 쪽으로 보입니다. ' + m.why +
-        '<br>둘 다 맞을 수도 있습니다 — 그럴 때는 「동적(API), 응답은 JSON」 처럼 함께 적어 주세요.'));
+        '<br>둘 다 맞을 수도 있습니다 — 그럴 때는 <b>「동적」 카드를 함께</b> 눌러 「반정형 · 동적」 처럼 고르세요.'));
     }
 
     host.appendChild(card('✍ 내가 받은 데이터는 어느 쪽인가', [
@@ -378,11 +344,15 @@ REG({
         help: '내려받은 <b>파일의 확장자</b>나, 받은 방식을 적습니다.',
         after: guessBox,
         onInput: function () { paintGuess(); } }),
+      /* ★ 「동적」 은 *받는 방식*이라 *모양*(정형·비정형·반정형)과 함께 고를 수 있다
+            (2026-09-20 사용자 지시). 오픈API 로 받는 표는 「정형 · 동적」 이다. */
       pickField('dtype', (DATA.types || []).map(function (t) {
-        return { label: t.key, icon: t.icon };
+        return { label: t.key, icon: t.icon, also: t.key === '동적' };
       }), {
         help: '위 설명을 보고 <b>사이트가 어떤 방식으로 주었는지</b> 고릅니다. ' +
-              '헷갈리면 아래 칸에 두 가지를 함께 적어도 됩니다.',
+              '모양(정형·비정형·반정형)은 하나만, <b>「동적」 은 함께</b> 고를 수 있습니다 — ' +
+              '주소를 불러 표를 받았다면 「정형 · 동적」 처럼 둘 다 누르세요. ' +
+              '목록에 없으면 아래 칸에 직접 적어도 됩니다.',
         other: true,
         otherPh: '예: 동적(API), 응답은 JSON',
         onPick: function () { paintMis(); }
@@ -391,39 +361,6 @@ REG({
     ]));
 
     paintGuess();
-
-    /* ── 연습: 형태 분류 ────────────────────────────── */
-    var g2 = grader('type-sort');
-    var rows2 = (DATA.typeQuiz || []).map(function (q, i) {
-      return [(i + 1), q.q, g2.sel(DATA.typeChoices, q.a, { label: (i + 1) + '번 답' })];
-    });
-    var why2 = h('div');
-
-    host.appendChild(card('🔎 연습 — 여덟 가지를 나누어 보기', [
-      goalBox(['각 줄이 어떤 형태인지 고르세요.',
-               '<b>「무엇으로 주는가」</b> 를 보면 됩니다. 파일이면 그 파일의 형식, 주소를 부르면 동적입니다.']),
-      table(['', '이런 데이터를 받았다면', '어떤 형태?'], rows2, { left: [1] }),
-      g2.controls(),
-      g2.verdict(),
-      why2
-    ]));
-
-    var oc2 = g2.check;
-    g2.check = function (silent) {
-      var r = oc2(silent);
-      if (!silent) {
-        clear(why2);
-        why2.appendChild(h('h3', '풀이'));
-        (DATA.typeQuiz || []).forEach(function (q, i) {
-          why2.appendChild(h('div.why', [
-            h('b', (i + 1) + '. ' + q.a),
-            h('p.small', q.why)
-          ]));
-        });
-      }
-      return r;
-    };
-    g2.restore();
   }
 });
 
@@ -510,43 +447,99 @@ REG({
               '가치·태도 평가 요소도 <b>「데이터가 편향되지 않도록 수집하는 자세」</b> 입니다. ' +
               '빠진 것을 스스로 찾아 밝히는 것이 그 자세입니다.')
     ]));
+  }
+});
 
-    /* ── 연습: 편향 점검 ────────────────────────────── */
-    var g3 = grader('bias-check');
-    var box3 = h('div');
-    (DATA.biasQuiz || []).forEach(function (q, i) {
-      box3.appendChild(h('div.qitem', [
-        h('p.qq', (i + 1) + '. ' + q.q),
-        g3.pick(q.opts, q.a, { cls: 'col' })
-      ]));
+/* ══════════════════════════════════════════════════════════
+   ⑥ 해결할 수 있는 문제
+   ══════════════════════════════════════════════════════════ */
+REG({
+  id: 'solve', tab: 1, title: '🛠 풀 수 있는 문제',
+  render: function (host) {
+    var badges = h('div');
+    var frameBox = h('div.framebox');
+    var pickKey = loadAns('problem-kind', null);
+
+    function paintBadges() {
+      clear(badges);
+      badges.appendChild(badgeRow(JUDGE.problemBadges(getVal('problem')),
+        '네 가지를 모두 담았습니다. 아주 좋은 답입니다.'));
+    }
+
+    function paintFrame() {
+      var k = null;
+      (DATA.problemKinds || []).forEach(function (x) { if (x.key === pickKey) k = x; });
+      clear(frameBox);
+      if (!k) {
+        frameBox.appendChild(h('p.small',
+          '네 가지 가운데 하나를 누르면 문장 틀과 보기를 보여 드립니다. 꼭 이대로 쓸 필요는 없습니다.'));
+        return;
+      }
+      frameBox.appendChild(h('b', k.icon + ' ' + k.name));
+      frameBox.appendChild(h('p.frame-t', { html: k.frame }));
+      frameBox.appendChild(h('p.small', '보기 — ' + k.ex));
+    }
+
+    /* 앞 화면에서 쓴 것을 다시 보여 준다 — 이어서 쓰기 쉽도록 */
+    var recall = [];
+    if (JUDGE.len(getVal('interest'))) recall.push(['① 관심 분야', getVal('interest')]);
+    if (JUDGE.len(getVal('data_name'))) recall.push(['② 데이터 이름', getVal('data_name')]);
+    if (JUDGE.len(getVal('attrs'))) recall.push(['⑦-3 들어 있는 값', getVal('attrs')]);
+    if (JUDGE.len(getVal('bias'))) recall.push(['⑦-4 빠지거나 치우친 것', getVal('bias')]);
+
+    var kinds = h('div.cards');
+    (DATA.problemKinds || []).forEach(function (k) {
+      var b = h('button.dcard' + (k.key === pickKey ? '.on' : ''), { type: 'button',
+        onclick: function () {
+          pickKey = k.key;
+          saveAns('problem-kind', pickKey);
+          Array.prototype.forEach.call(kinds.children, function (c) { c.classList.remove('on'); });
+          b.classList.add('on');
+          paintFrame();
+        } });
+      b.appendChild(h('span.dc-i', k.icon));
+      add(b, k.name);
+      kinds.appendChild(b);
     });
-    var why3 = h('div');
 
-    host.appendChild(card('🔎 연습 — 이 수집 방법의 문제는?', [
-      goalBox(['다섯 가지 상황에서 <b>무엇이 잘못되었는지</b> 고르세요.',
-               '같은 잘못을 내 데이터에서도 하고 있지 않은지 견주어 보세요.']),
-      box3,
-      g3.controls(),
-      g3.verdict(),
-      why3
+    host.appendChild(card('🛠 이 데이터로 어떤 문제를 풀 수 있을까', [
+      goalBox([
+        '①번에 고른 <b>관심 분야</b>가 여기에서 <b>풀 수 있는 문제</b>로 자랍니다.',
+        '데이터 안의 <b>어떤 값</b>을 보면 답이 나오는지 함께 적습니다.',
+        '<b>이 데이터만으로 알 수 없는 것</b>도 한 문장 적으면 훨씬 좋은 답이 됩니다.'
+      ]),
+
+      recall.length
+        ? table(null, recall, { left: [0, 1], leftHead: true })
+        : noteBox('앞 화면들을 아직 채우지 않았습니다. ①~⑤를 먼저 쓰고 오면 이 칸을 쓰기가 훨씬 쉽습니다.'),
+
+      h('h3', '문제는 네 가지 결로 나옵니다'),
+      kinds,
+      frameBox,
+
+      h('div.hr'),
+
+      field('problem', {
+        rows: 6,
+        help: '한 가지를 <b>끝까지</b> 적는 편이, 여러 가지를 한 줄씩 늘어놓는 것보다 좋습니다.',
+        ph: '예: 우리 학교 반경 400m 안에 정류장이 몇 곳인지 세고, 학생 수가 비슷한 이웃 학교와 ' +
+            '견주어 통학 여건이 실제로 나쁜지 밝힐 수 있다. 다만 배차 간격이 없으므로 ' +
+            '정류장 수만으로는 부족하고 시간표 데이터를 더 모아야 한다.',
+        onInput: function () { paintBadges(); }
+      }),
+      badges,
+
+      h('h3', '내 문제를 스스로 점검해 보기'),
+      h('ul.selfq', (DATA.problemSelf || []).map(function (q) { return h('li', rich(q)); })),
+
+      tipBox('<b>데이터로 답할 수 없는 문제</b>도 있습니다. ' +
+             '「우리 학교 급식은 맛있는가」 는 이 데이터로 답할 수 없습니다. ' +
+             '「몇 명이 얼마나 남겼는가」 로 바꾸면 답할 수 있습니다. ' +
+             '데이터로 답할 수 있게 물음을 바꾸는 것도 데이터 과학의 일입니다.')
     ]));
 
-    var oc3 = g3.check;
-    g3.check = function (silent) {
-      var r = oc3(silent);
-      if (!silent) {
-        clear(why3);
-        why3.appendChild(h('h3', '풀이 — 편향에는 이름이 있습니다'));
-        (DATA.biasQuiz || []).forEach(function (q, i) {
-          why3.appendChild(h('div.why', [
-            h('b', (i + 1) + '. ' + q.name),
-            h('p.small', q.why)
-          ]));
-        });
-      }
-      return r;
-    };
-    g3.restore();
+    paintFrame();
+    paintBadges();
   }
 });
 </script>

@@ -142,6 +142,18 @@ describe('파일 형식으로 형태 짐작하기', () => {
     eq(m.guess, '반정형');
     eq(JUDGE.typeMismatch('정형', 'CSV'), null);
   });
+  test('★ 함께 고른 형태를 열쇠로 가른다 (2026-09-20)', () => {
+    deepEq(JUDGE.typeKeys('정형 · 동적'), ['정형', '동적']);
+    deepEq(JUDGE.typeKeys('반정형 · 동적'), ['반정형', '동적']);
+    deepEq(JUDGE.typeKeys('비정형'), ['비정형'], '「비정형」 이 정형으로도 걸리면 안 된다');
+    deepEq(JUDGE.typeKeys(''), []);
+  });
+  test('★ 함께 고른 형태에서는 어긋남을 잘못 알리지 않는다', () => {
+    eq(JUDGE.typeMismatch('정형 · 동적', 'CSV'), null);
+    eq(JUDGE.typeMismatch('정형 · 동적', '오픈API'), null);
+    eq(JUDGE.typeMismatch('반정형 · 동적', 'JSON'), null);
+    ok(JUDGE.typeMismatch('비정형 · 동적', 'CSV'), 'CSV 인데 비정형이면 짚어 준다');
+  });
   test('★ API 로 받은 JSON 은 어긋난 것이 아니다 (둘 다 맞다)', () => {
     eq(JUDGE.typeMismatch('동적', 'JSON'), null);
     eq(JUDGE.typeMismatch('반정형', '오픈API'), null);
@@ -190,10 +202,18 @@ describe('속성 표는 정형일 때만 묻는다', () => {
     ok(!JUDGE.needsAttrs('동적'));
     ok(!JUDGE.needsAttrs('동적(API), 응답은 JSON'));
   });
+  test('★ 「동적」 은 모양과 함께 고를 수 있다 (2026-09-20)', () => {
+    /* 주소로 받은 표는 여전히 정형이므로 속성 표를 묻는다 */
+    ok(JUDGE.needsAttrs('정형 · 동적'));
+    ok(!JUDGE.needsAttrs('반정형 · 동적'));
+    ok(!JUDGE.needsAttrs('비정형 · 동적'));
+    ok(!JUDGE.needsAttrs('동적'), '동적만 고르면 모양을 모르니 묻지 않는다');
+  });
   test('★ 화면과 서버의 판정이 늘 같다', () => {
     /* 둘이 어긋나면 화면에는 칸이 없는데 서버는 그 칸을 세어 100% 가 안 된다 */
     ['정형', '반정형', '비정형', '동적', '', '정형 데이터 (CSV)',
-     '동적(API), 응답은 JSON', '이미지 묶음'].forEach((t) => {
+     '동적(API), 응답은 JSON', '이미지 묶음',
+     '정형 · 동적', '반정형 · 동적', '비정형 · 동적'].forEach((t) => {
       eq(JUDGE.needsAttrs(t), api.isStructured_(t), '「' + t + '」 에서 판정이 다릅니다');
     });
   });
@@ -202,8 +222,8 @@ describe('속성 표는 정형일 때만 묻는다', () => {
     const base = { fields, acts, scores: {}, attrRows: [], screenFields: DATA.screenFields };
     const yes = JUDGE.checklist({ dtype: '정형' }, base);
     const no = JUDGE.checklist({ dtype: '비정형' }, base);
-    eq(yes.length, 9);
-    eq(no.length, 8);
+    eq(yes.length, 8);
+    eq(no.length, 7);
     ok(!no.some((c) => c.text.indexOf('세 가지') >= 0), '비정형인데 속성 항목이 남아 있습니다');
   });
 });
@@ -277,10 +297,10 @@ describe('마지막 점검 목록', () => {
   }
   const attrRows = [{ name: 'a' }, { name: 'b' }, { name: 'c' }];
 
-  test('아홉 가지를 본다 (정형일 때)', () => {
+  test('여덟 가지를 본다 (정형일 때 · 연습 활동이 없으므로 활동 항목은 빠진다)', () => {
     const list = JUDGE.checklist(vals({ dtype: '정형' }), { fields, acts, scores: scoresAll(), attrRows,
       screenFields: DATA.screenFields });
-    eq(list.length, 9);
+    eq(list.length, 8);
   });
   test('다 채우고 링크·이용조건이 좋으면 반드시 고칠 것이 없다', () => {
     const list = JUDGE.checklist(vals({
@@ -322,12 +342,12 @@ describe('마지막 점검 목록', () => {
     ok(c.must, '반드시 고칠 것이어야 합니다');
     ok(!c.ok, '「없다」 두 글자로는 통과하면 안 됩니다');
   });
-  test('안 해 본 활동을 알려 준다', () => {
-    const list = JUDGE.checklist(vals(), { fields, acts, scores: {}, attrRows,
+  test('안 해 본 활동을 알려 준다 (활동이 다시 생길 때를 위해 가상 활동으로 지킨다)', () => {
+    const list = JUDGE.checklist(vals(), { fields, acts: [{ key: 'x', label: '가상 활동', max: 1 }], scores: {}, attrRows,
       screenFields: DATA.screenFields });
     const c = list.filter((x) => x.text.indexOf('연습 활동') >= 0)[0];
     ok(!c.ok);
-    ok(c.hint.indexOf('데이터 형태 분류') >= 0);
+    ok(c.hint.indexOf('가상 활동') >= 0);
   });
   test('긴 칸에 남은 뭉뚱그린 표현을 짚어 준다', () => {
     const list = JUDGE.checklist(vals({ why: '그냥 ' + '가'.repeat(80) }),

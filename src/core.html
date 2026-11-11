@@ -112,7 +112,7 @@ function screenTimer(fn, ms) {
 var STORE = {
   vals: {},      // 서술 칸  { data_name: '…' }
   answers: {},   // 활동의 풀이 상태 (이어서 하기용) · 속성 표
-  scores: {},    // { 'type-sort': {g:8, a:true} }
+  scores: {},    // { '활동키': {g:5, a:true} }
   acts: {},      // 서버가 준 활동 기준표
   fields: {},    // 서버가 준 서술 칸 기준표
   course: null,  // 이번 차시에 열어 줄 범위 (Code.gs 의 COURSE). null 이면 전부
@@ -266,7 +266,7 @@ function field(key, opt) {
 
     clear(warn);
     warn.classList.remove('show');
-    if (f.min >= 30) {                      /* 짧은 칸에는 잔소리하지 않는다 */
+    if (f.min >= 20) {                      /* 짧은 칸에는 잔소리하지 않는다 */
       var vg = JUDGE.vague(v);
       if (vg.length) {
         warn.classList.add('show');
@@ -301,6 +301,12 @@ function field(key, opt) {
 /**
  * 고르기가 그대로 서술 칸에 담기는 부품 (데이터 형태 · 이용 조건).
  * pickField('dtype', ['정형','비정형',…], {onPick:fn, other:true})
+ *
+ * ★ 옵션에 `also:true` 를 주면 **함께 고를 수 있는 항목**이 된다 (2026-09-20).
+ *   데이터 형태가 그런 경우다 — 「동적」 은 *받는 방식*이라 「정형·비정형·반정형」
+ *   (*모양*) 과 함께 성립한다. 예: 오픈API 로 받는 표 = 「정형 · 동적」.
+ *   함께 고른 값은 「정형 · 동적」 처럼 가운뎃점으로 이어 한 칸에 담는다 —
+ *   판정 함수들이 `indexOf` 로 읽으므로 글 하나로 두어야 시트에도 그대로 들어간다.
  */
 function pickField(key, options, opt) {
   opt = opt || {};
@@ -308,21 +314,57 @@ function pickField(key, options, opt) {
   var wrap = h('div.fld');
   var cur = getVal(key);
   var cards = h('div.cards');
-  var btns = {};
+  var btns = {}, mainKeys = [], alsoKeys = [];
 
-  function choose(v) {
-    cur = v;
+  /** 「정형 · 동적」 을 조각으로 가른다. 목록에 없는 글(직접 적기)이면 null */
+  function parse(v) {
+    var parts = String(v == null ? '' : v).split('·');
+    var main = '', also = [], i, p, ok = true;
+    for (i = 0; i < parts.length; i++) {
+      p = parts[i].replace(/^\s+|\s+$/g, '');
+      if (!p) continue;
+      if (mainKeys.indexOf(p) >= 0 && !main) main = p;
+      else if (alsoKeys.indexOf(p) >= 0 && also.indexOf(p) < 0) also.push(p);
+      else ok = false;
+    }
+    return ok ? { main: main, also: also } : null;
+  }
+
+  function value(st) {
+    var out = st.main ? [st.main] : [];
+    alsoKeys.forEach(function (k) { if (st.also.indexOf(k) >= 0) out.push(k); });
+    return out.join(' · ');
+  }
+
+  function mark(st) {
     Object.keys(btns).forEach(function (k) { btns[k].classList.remove('on'); });
-    if (btns[v]) btns[v].classList.add('on');
+    if (btns[st.main]) btns[st.main].classList.add('on');
+    st.also.forEach(function (k) { if (btns[k]) btns[k].classList.add('on'); });
+  }
+
+  /** 카드를 눌렀을 때 — 모양은 하나만, 「함께 고르기」 는 눌러서 켜고 끈다 */
+  function choose(label, isAlso) {
+    var st = parse(getVal(key)) || { main: '', also: [] };
+    if (isAlso) {
+      var at = st.also.indexOf(label);
+      if (at >= 0) st.also.splice(at, 1); else st.also.push(label);
+    } else {
+      st.main = (st.main === label) ? '' : label;
+    }
+    var v = value(st);
+    mark(st);
+    cur = v;
     saveVal(key, v);
-    if (other) other.value = btns[v] ? '' : v;
+    if (other) other.value = '';
     if (opt.onPick) opt.onPick(v);
   }
 
   options.forEach(function (o) {
     var label = typeof o === 'string' ? o : o.label;
-    var b = h('button.dcard' + (cur === label ? '.on' : ''), { type: 'button',
-      onclick: function () { choose(label); } });
+    var isAlso = typeof o !== 'string' && !!o.also;
+    (isAlso ? alsoKeys : mainKeys).push(label);
+    var b = h('button.dcard' + (isAlso ? '.dcard-also' : ''), { type: 'button',
+      onclick: function () { choose(label, isAlso); } });
     if (typeof o !== 'string' && o.icon) b.appendChild(h('span.dc-i', o.icon));
     add(b, label);
     if (typeof o !== 'string' && o.sub) b.appendChild(h('span.dc-s', o.sub));
@@ -330,10 +372,13 @@ function pickField(key, options, opt) {
     cards.appendChild(b);
   });
 
+  /* 처음 그릴 때는 저장하지 않고 표시만 한다 — 직접 적은 글을 지우면 안 된다 */
+  mark(parse(cur) || { main: '', also: [] });
+
   var other = null;
   if (opt.other) {
     other = h('input.ta.one', { type: 'text', placeholder: opt.otherPh || '목록에 없으면 직접 적어 주세요',
-      value: btns[cur] ? '' : cur, 'aria-label': f.title + ' 직접 적기' });
+      value: parse(cur) ? '' : cur, 'aria-label': f.title + ' 직접 적기' });
     other.addEventListener('input', function () {
       Object.keys(btns).forEach(function (k) { btns[k].classList.remove('on'); });
       saveVal(key, other.value);
@@ -469,7 +514,7 @@ function attrTable(key, opt) {
    5. 채점 위젯 — 모든 [확인] 단추가 이것을 쓴다
    ════════════════════════════════════════════════════════════ */
 /**
- * grader('type-sort') 를 만들고
+ * grader('활동키') 를 만들고
  *   g.sel(고를값들, 정답, 옵션)  → <select>
  *   g.pick(보기배열, 정답, 옵션) → 여러 보기 가운데 하나 고르기 (기본 선택 없음)
  *   g.custom({node, get, cmp, set, mark})
